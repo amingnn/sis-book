@@ -1,6 +1,7 @@
 import sys
 import threading
 import time
+import traceback
 import urllib.request
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -20,11 +21,30 @@ from app.purchases.router import router as purchases_router
 from app.sales.models import SalesRecord
 from app.sales.router import router as sales_router
 from app.orders.router import router as orders_router
+from app.config import get_data_dir
+
+
+def _get_base_dir() -> Path:
+    """打包后用 sys._MEIPASS，开发时用项目根目录"""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent.parent
+
+
+# region agent log
+_log_file = get_data_dir() / "debug.log"
+def _log(msg: str):
+    import json, time as _t
+    with open(_log_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"ts": _t.time(), "msg": msg}, ensure_ascii=False) + "\n")
+# endregion
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    _log("lifespan: init_db start")
     init_db()
+    _log("lifespan: init_db done")
     yield
 
 
@@ -115,17 +135,27 @@ def get_dashboard(session: Session = Depends(get_session)):
     }
 
 
-# 生产模式下托管前端静态文件
-frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+BASE_DIR = _get_base_dir()
+frontend_dist = BASE_DIR / "frontend" / "dist"
+_log(f"frozen={getattr(sys, 'frozen', False)}, BASE_DIR={BASE_DIR}, frontend_dist={frontend_dist}, exists={frontend_dist.exists()}")
+
 if frontend_dist.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="static")
+    _log("frontend static files mounted")
+else:
+    _log("WARNING: frontend dist NOT FOUND, static files not mounted")
 
 
 def start_server(port: int = 18234):
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    try:
+        _log(f"start_server: starting uvicorn on port {port}")
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    except Exception:
+        _log(f"start_server CRASHED: {traceback.format_exc()}")
 
 
 def main():
+    _log(f"main() called, sys.argv={sys.argv}, frozen={getattr(sys, 'frozen', False)}")
     dev_mode = "--dev" in sys.argv
     port = 18234
 
@@ -135,13 +165,19 @@ def main():
         server_thread = threading.Thread(target=start_server, args=(port,), daemon=True)
         server_thread.start()
 
-        # 等待后端就绪，最多等 15 秒
-        for _ in range(150):
+        _log("waiting for backend to be ready...")
+        ready = False
+        for i in range(150):
             try:
                 urllib.request.urlopen(f"http://127.0.0.1:{port}/api/dashboard", timeout=1)
+                _log(f"backend ready after {i * 0.1:.1f}s")
+                ready = True
                 break
             except Exception:
                 time.sleep(0.1)
+
+        if not ready:
+            _log("WARNING: backend NOT ready after 15s, opening window anyway")
 
         import webview
 
