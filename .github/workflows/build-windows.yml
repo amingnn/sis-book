@@ -68,4 +68,3 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/installer/mucheng-book_Setup.exe
-          generate_release_notes: true  
