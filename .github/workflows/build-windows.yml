@@ -13,13 +13,13 @@ jobs:
   build-frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
       
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         with:
           version: latest
 
@@ -28,7 +28,7 @@ jobs:
         run: pnpm install --frozen-lockfile && pnpm run build
 
       - name: Upload fronted dist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v8
         with:
           name: frontend-dist
           path: frontend/dist
@@ -38,16 +38,16 @@ jobs:
     runs-on: windows-latest
     needs: build-frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download frontend dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: frontend/dist
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8
 
       - name: Install backend dependencies && Build with PyInstaller
         working-directory: backend
