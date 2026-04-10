@@ -31,6 +31,13 @@ def _get_base_dir() -> Path:
     return Path(__file__).parent.parent
 
 
+# PyInstaller console=False 时 sys.stdout/stderr 为 None，会导致 uvicorn 等库崩溃
+if getattr(sys, "frozen", False) and sys.stdout is None:
+    import os
+    sys.stdout = open(os.devnull, "w")
+    sys.stderr = open(os.devnull, "w")
+
+
 # region agent log
 _log_file = get_data_dir() / "debug.log"
 def _log(msg: str):
