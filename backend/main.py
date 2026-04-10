@@ -1,5 +1,7 @@
 import sys
 import threading
+import time
+import urllib.request
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import date
@@ -132,6 +134,14 @@ def main():
     else:
         server_thread = threading.Thread(target=start_server, args=(port,), daemon=True)
         server_thread.start()
+
+        # 等待后端就绪，最多等 15 秒
+        for _ in range(150):
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/dashboard", timeout=1)
+                break
+            except Exception:
+                time.sleep(0.1)
 
         import webview
 
