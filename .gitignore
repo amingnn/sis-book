@@ -22,6 +22,7 @@ node_modules/
 frontend/dist/
 backend/build/
 backend/dist/
+dist/
 
 # Env
 .env
