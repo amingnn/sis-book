@@ -3,7 +3,7 @@
 
 #define MyAppName      "暮橙体育记账本"
 #define MyAppExeName   "暮橙记账本.exe"
-#define MyAppVersion   "0.1.0"
+#define MyAppVersion   "dev"
 #define MyAppPublisher "暮橙体育"
 
 [Setup]
