@@ -135,8 +135,8 @@ jobs:
 
       - name: 发布 GitHub Release
         uses: softprops/action-gh-release@v2
-        generate_release_notes: true
         with:
+          generate_release_notes: true
           files: |
             dist/installer/*.exe
             dist/*-macOS.dmg

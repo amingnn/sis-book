@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+# type: ignore
 # PyInstaller 打包配置 - 暮橙体育记账本
 # 使用方式: pyinstaller build/sis-book.spec
 
@@ -7,7 +8,7 @@ import sys
 from PyInstaller.utils.hooks import collect_all
 
 # spec 文件上级目录即项目根目录
-ROOT = os.path.abspath(os.path.join(SPECPATH, '..'))
+ROOT = os.path.abspath(os.path.join(SPECPATH, '..')) 
 APP_NAME = '暮橙记账本'  # APP 名
 
 extra_datas = []
@@ -81,8 +82,6 @@ coll = COLLECT(
 )
     
 if sys.platform == 'darwin':
-    from PyInstaller.building.api import BUNDLE
-
     app = BUNDLE(
         coll, # 将上面收集好的散装零件作为输入
         name='暮橙记账本.app', # 最终生成的 App 包名
