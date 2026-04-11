@@ -1,0 +1,141 @@
+name: 打包桌面应用
+
+env:
+  APP_NAME: "暮橙记账本"  
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request: # 🌟 增加 PR 触发
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  # 构建前端
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      
+      - uses: pnpm/action-setup@v5
+        with:
+          version: latest
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: 安装前端依赖并构建
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile && pnpm run build
+
+      - name: 上传前端构建产物
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  # 构建后端
+  build-windows-installer:
+    runs-on: windows-latest
+    needs: build-frontend
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: 下载前端构建产物
+        uses: actions/download-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57
+        with:
+          enable-cache: true
+
+      - name: 安装后端依赖并用 PyInstaller 打包
+        working-directory: backend
+        run: |
+          uv sync
+          uv pip install pyinstaller
+          uv run pyinstaller ../build/sis-book.spec --noconfirm --distpath ../dist
+
+      - name: 安装 Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: 构建安装包
+        run: iscc build/installer.iss /DMyAppVersion="${{ github.ref_name }}"  # 传递版本号给 Inno Setup 
+
+      - name: 上传 exe 包
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: dist/installer/*.exe
+
+  build-macos:
+    runs-on: macos-latest
+    needs: build-frontend
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: 下载前端构建产物
+        uses: actions/download-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57
+        with:
+          enable-cache: true
+
+      - name: 安装后端依赖并用 PyInstaller 打包 (macOS App)
+        working-directory: backend
+        run: |
+          uv sync
+          uv pip install pyinstaller
+          uv run pyinstaller ../build/sis-book.spec --noconfirm --distpath ../dist
+
+      - name: 制作dmg安装包
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "${{ env.APP_NAME }}" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --app-drop-link 400 120 \
+            "dist/${{ env.APP_NAME }}-macOS.dmg" \
+            "dist/${{ env.APP_NAME }}.app"
+
+      - name: 上传 dmg 包
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-dmg
+          path: dist/${{ env.APP_NAME }}-macOS.dmg
+
+  release:  
+    if: startsWith(github.ref, 'refs/tags/') # 🌟 只有是 Tag 触发时才执行
+    needs: [build-windows-installer, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载包产物
+        uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 发布 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/installer/*.exe
+            dist/*-macOS.dmg
