@@ -15,10 +15,10 @@ def api_list_orders(session: Session = Depends(get_session)):
 
 @router.get("/{order_id}", response_model=SalesOrderResponse)
 def api_get_order(order_id: int, session: Session = Depends(get_session)):
-    order = get_order(session, order_id)
-    if not order:
+    if order := get_order(session, order_id):
+        return order
+    else:
         raise HTTPException(status_code=404, detail="销售单不存在")
-    return order
 
 
 @router.post("", response_model=SalesOrderResponse, status_code=201)

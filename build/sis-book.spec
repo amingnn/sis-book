@@ -3,12 +3,12 @@
 # PyInstaller 打包配置 - 暮橙体育记账本
 # 使用方式: pyinstaller build/sis-book.spec
 
-import os
 import sys
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
 # spec 文件上级目录即项目根目录
-ROOT = os.path.abspath(os.path.join(SPECPATH, '..')) 
+ROOT = Path(SPECPATH).parent.resolve()   # noqa: F821
 APP_NAME = '暮橙记账本'  # APP 名
 
 extra_datas = []
@@ -32,12 +32,12 @@ extra_datas += wv_datas
 extra_binaries += wv_binaries
 extra_hiddenimports += wv_hiddenimports
 
-a = Analysis(
-    [os.path.join(ROOT, 'backend', 'main.py')],
-    pathex=[os.path.join(ROOT, 'backend')],
+a = Analysis(  # noqa: F821
+    [str(ROOT / 'backend' / 'main.py')],
+    pathex=[str(ROOT / 'backend')],
     binaries=extra_binaries,
     datas=[
-        (os.path.join(ROOT, 'frontend', 'dist'), os.path.join('frontend', 'dist')),
+        (str(ROOT / 'frontend' / 'dist'), 'frontend/dist'),
     ] + extra_datas,
     hiddenimports=[
         'app.sales.router',
@@ -54,9 +54,9 @@ a = Analysis(
     noarchive=False,
 )
 
-pyz = PYZ(a.pure)
+pyz = PYZ(a.pure)  # noqa: F821
 
-exe = EXE(
+exe = EXE(  # noqa: F821
     pyz,
     a.scripts,
     [],
@@ -70,7 +70,7 @@ exe = EXE(
     disable_windowed_traceback=False,
 )
 
-coll = COLLECT(
+coll = COLLECT(  # noqa: F821
     exe,
     a.binaries,
     a.zipfiles,
@@ -82,7 +82,7 @@ coll = COLLECT(
 )
     
 if sys.platform == 'darwin':
-    app = BUNDLE(
+    app = BUNDLE(  # noqa: F821
         coll, # 将上面收集好的散装零件作为输入
         name='暮橙记账本.app', # 最终生成的 App 包名
         # 建议在项目根目录创建 assets 文件夹放图标

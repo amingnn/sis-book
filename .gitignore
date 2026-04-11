@@ -1,5 +1,6 @@
 # mine
 local/
+**/repomix-output.xml
 
 # OS
 .DS_Store

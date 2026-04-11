@@ -1,3 +1,4 @@
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false
 import sys
 import threading
 import time
@@ -10,18 +11,17 @@ from decimal import Decimal
 from pathlib import Path
 
 import uvicorn
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from sqlmodel import Session, func, select
-
+from app.config import get_data_dir
 from app.database import get_session, init_db
+from app.orders.router import router as orders_router
 from app.purchases.models import PurchaseOrder
 from app.purchases.router import router as purchases_router
 from app.sales.models import SalesRecord
 from app.sales.router import router as sales_router
-from app.orders.router import router as orders_router
-from app.config import get_data_dir
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from sqlmodel import Session, func, select
 
 
 def _get_base_dir() -> Path:
@@ -34,16 +34,23 @@ def _get_base_dir() -> Path:
 # PyInstaller console=False 时 sys.stdout/stderr 为 None，会导致 uvicorn 等库崩溃
 if getattr(sys, "frozen", False) and sys.stdout is None:
     import os
+
     sys.stdout = open(os.devnull, "w")
     sys.stderr = open(os.devnull, "w")
 
 
 # region agent log
 _log_file = get_data_dir() / "debug.log"
+
+
 def _log(msg: str):
-    import json, time as _t
+    import json
+    import time as _t
+
     with open(_log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps({"ts": _t.time(), "msg": msg}, ensure_ascii=False) + "\n")
+
+
 # endregion
 
 
@@ -144,7 +151,9 @@ def get_dashboard(session: Session = Depends(get_session)):
 
 BASE_DIR = _get_base_dir()
 frontend_dist = BASE_DIR / "frontend" / "dist"
-_log(f"frozen={getattr(sys, 'frozen', False)}, BASE_DIR={BASE_DIR}, frontend_dist={frontend_dist}, exists={frontend_dist.exists()}")
+_log(
+    f"frozen={getattr(sys, 'frozen', False)}, BASE_DIR={BASE_DIR}, frontend_dist={frontend_dist}, exists={frontend_dist.exists()}"
+)
 
 if frontend_dist.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="static")
@@ -161,7 +170,7 @@ def start_server(port: int = 18234):
         _log(f"start_server CRASHED: {traceback.format_exc()}")
 
 
-def main():
+def main():  # sourcery skip: extract-method
     _log(f"main() called, sys.argv={sys.argv}, frozen={getattr(sys, 'frozen', False)}")
     dev_mode = "--dev" in sys.argv
     port = 18234
@@ -176,7 +185,9 @@ def main():
         ready = False
         for i in range(150):
             try:
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/dashboard", timeout=1)
+                urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/dashboard", timeout=1
+                )
                 _log(f"backend ready after {i * 0.1:.1f}s")
                 ready = True
                 break
