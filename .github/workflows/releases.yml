@@ -1,6 +1,7 @@
 name: 打包桌面应用
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   APP_NAME: "暮橙记账本"  
 
 on:
@@ -77,7 +78,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: windows-installer
-          path: dist/installer/*.exe
+          path: dist/*.exe
 
   build-macos:
     runs-on: macos-latest
@@ -112,14 +113,14 @@ jobs:
             --window-size 600 400 \
             --icon-size 100 \
             --app-drop-link 400 120 \
-            "dist/${{ env.APP_NAME }}-macOS.dmg" \
+            "dist/mucheng-book-macOS.dmg" \
             "dist/${{ env.APP_NAME }}.app"
 
       - name: 上传 dmg 包
         uses: actions/upload-artifact@v7
         with:
           name: macos-dmg
-          path: dist/${{ env.APP_NAME }}-macOS.dmg
+          path: dist/mucheng-book-macOS.dmg
 
   release:  
     if: startsWith(github.ref, 'refs/tags/') # 🌟 只有是 Tag 触发时才执行
@@ -132,10 +133,13 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: 检查文件列表 (调试用，成功后可删除)
+        run: ls -R dist
+
       - name: 发布 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            dist/installer/*.exe
+            dist/*.exe
             dist/*-macOS.dmg
