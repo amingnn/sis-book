@@ -8,6 +8,7 @@ from PyInstaller.utils.hooks import collect_all
 
 # spec 文件上级目录即项目根目录
 ROOT = os.path.abspath(os.path.join(SPECPATH, '..'))
+APP_NAME = '暮橙记账本'  # APP 名
 
 extra_datas = []
 extra_binaries = []
@@ -59,7 +60,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='暮橙记账本',
+    name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -71,9 +72,31 @@ exe = EXE(
 coll = COLLECT(
     exe,
     a.binaries,
+    a.zipfiles,
     a.datas,
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='暮橙记账本',
+    name=APP_NAME,
 )
+    
+if sys.platform == 'darwin':
+    from PyInstaller.building.api import BUNDLE
+
+    app = BUNDLE(
+        coll, # 将上面收集好的散装零件作为输入
+        name='暮橙记账本.app', # 最终生成的 App 包名
+        # 建议在项目根目录创建 assets 文件夹放图标
+        # icon=os.path.join(ROOT, 'assets', 'icon.icns'), 
+        icon=None, 
+        bundle_identifier='com.sisbook', # 唯一的 ID
+        info_plist={
+            'CFBundleDisplayName': APP_NAME,
+            'CFBundleName': APP_NAME,
+            'CFBundleShortVersionString': '1.0.0',
+            'NSHighResolutionCapable': True, # 开启 Retina 支持，否则网页会糊
+            'LSMinimumSystemVersion': '10.13',
+            # 解决 pywebview 可能需要的权限提示
+            'NSAppTransportSecurity': {'NSAllowsArbitraryLoads': True},
+        },
+    )
