@@ -80,7 +80,7 @@ def seed():
                 unit_price=Decimal(str(round(random.uniform(0.5, 6.0), 2))),
                 box_size=f"{round(random.uniform(0.01, 0.2), 3)}",
                 notes="",
-            )
+            ) # type: ignore
             order.items.append(item)
         session.add(order)
 

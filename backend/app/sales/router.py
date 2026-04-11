@@ -34,10 +34,10 @@ def read_records(
 
 @router.get("/{record_id}", response_model=SalesRecordResponse)
 def read_record(record_id: int, session: Session = Depends(get_session)):
-    record = service.get_record(session, record_id)
-    if not record:
+    if record := service.get_record(session, record_id):
+        return record
+    else:
         raise HTTPException(status_code=404, detail="记录不存在")
-    return record
 
 
 @router.post("", response_model=SalesRecordResponse, status_code=201)
@@ -47,10 +47,10 @@ def create_record(data: SalesRecordCreate, session: Session = Depends(get_sessio
 
 @router.put("/{record_id}", response_model=SalesRecordResponse)
 def update_record(record_id: int, data: SalesRecordUpdate, session: Session = Depends(get_session)):
-    record = service.update_record(session, record_id, data)
-    if not record:
+    if record := service.update_record(session, record_id, data):
+        return record
+    else:
         raise HTTPException(status_code=404, detail="记录不存在")
-    return record
 
 
 @router.delete("/{record_id}", status_code=204)

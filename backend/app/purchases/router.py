@@ -34,10 +34,10 @@ def list_purchases(
 
 @router.get("/{purchase_id}", response_model=PurchaseOrderResponse)
 def get_purchase(purchase_id: int, session: Session = Depends(get_session)):
-    order = service.get_purchase(session, purchase_id)
-    if not order:
+    if order := service.get_purchase(session, purchase_id):
+        return order
+    else:
         raise HTTPException(status_code=404, detail="采购单不存在")
-    return order
 
 
 @router.post("", response_model=PurchaseOrderResponse, status_code=201)
@@ -53,15 +53,15 @@ def update_purchase(
     data: PurchaseOrderUpdate,
     session: Session = Depends(get_session),
 ):
-    order = service.get_purchase(session, purchase_id)
-    if not order:
+    if order := service.get_purchase(session, purchase_id):
+        return service.update_purchase(session, order, data)
+    else:
         raise HTTPException(status_code=404, detail="采购单不存在")
-    return service.update_purchase(session, order, data)
 
 
 @router.delete("/{purchase_id}", status_code=204)
 def delete_purchase(purchase_id: int, session: Session = Depends(get_session)):
-    order = service.get_purchase(session, purchase_id)
-    if not order:
+    if order := service.get_purchase(session, purchase_id):
+        service.delete_purchase(session, order)
+    else:
         raise HTTPException(status_code=404, detail="采购单不存在")
-    service.delete_purchase(session, order)
