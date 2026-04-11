@@ -76,7 +76,7 @@ jobs:
       - name: 上传 exe 包
         uses: actions/upload-artifact@v7
         with:
-          name: dist
+          name: windows-installer
           path: dist/installer/*.exe
 
   build-macos:
@@ -118,7 +118,7 @@ jobs:
       - name: 上传 dmg 包
         uses: actions/upload-artifact@v7
         with:
-          name: dist
+          name: macos-dmg
           path: dist/${{ env.APP_NAME }}-macOS.dmg
 
   release:  
@@ -126,10 +126,9 @@ jobs:
     needs: [build-windows-installer, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - name: 下载 Windows 安装包
+      - name: 下载包产物
         uses: actions/download-artifact@v7
         with:
-          name: dist
           path: dist
           merge-multiple: true
 
