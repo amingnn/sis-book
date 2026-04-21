@@ -49,6 +49,10 @@ class SalesOrderCreate(SalesOrderBase):
     items: list[SalesOrderItemCreate]
 
 
+class SalesOrderUpdate(SalesOrderBase):
+    items: list[SalesOrderItemCreate]
+
+
 class SalesOrderItemResponse(SalesOrderItemBase):
     id: int
     sales_order_id: int

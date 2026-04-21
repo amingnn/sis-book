@@ -19,6 +19,7 @@ import {
   PrinterOutlined,
   EyeOutlined,
   ArrowLeftOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
@@ -27,6 +28,7 @@ import {
   type SalesOrder,
   type SalesOrderForm,
   type SalesOrderItem,
+  type SalesOrderListParams,
 } from "../api/orders";
 
 type View = "list" | "create" | "detail";
@@ -74,15 +76,17 @@ export default function Orders() {
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<SalesOrder | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const [filters, setFilters] = useState<SalesOrderListParams>({});
 
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemRow[]>([newItemRow()]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (params: SalesOrderListParams = filters) => {
     setLoading(true);
     try {
-      const { data } = await ordersApi.list();
+      const { data } = await ordersApi.list(params);
       setOrders(data);
     } finally {
       setLoading(false);
@@ -91,7 +95,7 @@ export default function Orders() {
 
   useEffect(() => {
     if (view === "list") fetchOrders();
-  }, [view]);
+  }, [view, filters]);
 
   const totalAmount = items.reduce((sum, r) => sum + calcSubtotal(r), 0);
   const totalBoxes = items.reduce((sum, r) => sum + r.total_boxes, 0);
@@ -108,6 +112,7 @@ export default function Orders() {
   };
 
   const handleCreate = () => {
+    setEditingOrderId(null);
     setCurrentOrder(null);
     form.resetFields();
     form.setFieldsValue({ sales_date: dayjs(), payment_terms: "现金" });
@@ -115,10 +120,43 @@ export default function Orders() {
     setView("create");
   };
 
+  const fillOrderForm = (order: SalesOrder) => {
+    form.setFieldsValue({
+      customer_name: order.customer_name,
+      customer_phone: order.customer_phone,
+      delivery_address: order.delivery_address,
+      sales_date: dayjs(order.sales_date),
+      delivery_date: order.delivery_date ? dayjs(order.delivery_date) : null,
+      payment_terms: order.payment_terms,
+      notes: order.notes,
+    });
+    setItems(
+      order.items.map((item) => ({
+        key: item.id ? `item-${item.id}` : crypto.randomUUID(),
+        product_name: item.product_name,
+        color_spec: item.color_spec || "",
+        total_boxes: item.total_boxes,
+        per_box_qty: item.per_box_qty,
+        unit_price: Number(item.unit_price),
+        box_size: item.box_size || "",
+        notes: item.notes || "",
+      }))
+    );
+  };
+
   const handleView = async (id: number) => {
     const { data } = await ordersApi.get(id);
+    setEditingOrderId(null);
     setCurrentOrder(data);
     setView("detail");
+  };
+
+  const handleEdit = async (id: number) => {
+    const { data } = await ordersApi.get(id);
+    setEditingOrderId(id);
+    setCurrentOrder(data);
+    fillOrderForm(data);
+    setView("create");
   };
 
   const handleDelete = async (id: number) => {
@@ -154,8 +192,14 @@ export default function Orders() {
         notes: r.notes,
       })),
     };
-    const { data } = await ordersApi.create(payload);
-    message.success(`销售单 ${data.order_number} 创建成功`);
+    const { data } = editingOrderId
+      ? await ordersApi.update(editingOrderId, payload)
+      : await ordersApi.create(payload);
+    message.success(
+      editingOrderId
+        ? `销售单 ${data.order_number} 更新成功`
+        : `销售单 ${data.order_number} 创建成功`
+    );
     setCurrentOrder(data);
     setView("detail");
   };
@@ -170,6 +214,12 @@ export default function Orders() {
           <Typography.Title level={4} style={{ margin: 0 }}>销售单管理</Typography.Title>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建销售单</Button>
         </div>
+        <Card style={{ marginBottom: 16 }}>
+          <OrderFilters
+            onSearch={(nextFilters) => setFilters(nextFilters)}
+            onReset={() => setFilters({})}
+          />
+        </Card>
         <Card>
           <Table
             dataSource={orders}
@@ -196,6 +246,7 @@ export default function Orders() {
                 render: (_, record) => (
                   <Space>
                     <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record.id)}>查看</Button>
+                    <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record.id)}>编辑</Button>
                     <Button size="small" icon={<PrinterOutlined />} onClick={async () => { await handleView(record.id); }}>打印</Button>
                     <Popconfirm title="确定删除此销售单？" onConfirm={() => handleDelete(record.id)}>
                       <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
@@ -216,7 +267,9 @@ export default function Orders() {
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => setView("list")}>返回</Button>
-          <Typography.Title level={4} style={{ margin: 0 }}>新建销售单</Typography.Title>
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            {editingOrderId ? `编辑销售单 ${currentOrder?.order_number ?? ""}` : "新建销售单"}
+          </Typography.Title>
         </div>
         <Card>
           <Form form={form} layout="inline" style={{ flexWrap: "wrap", gap: "8px 0" }}>
@@ -329,8 +382,13 @@ export default function Orders() {
           </Form>
           <div style={{ textAlign: "right" }}>
             <Space>
-              <Button onClick={() => setView("list")}>取消</Button>
-              <Button type="primary" onClick={handleSubmit}>保存</Button>
+              <Button onClick={() => {
+                setEditingOrderId(null);
+                setView("list");
+              }}>取消</Button>
+              <Button type="primary" onClick={handleSubmit}>
+                {editingOrderId ? "保存修改" : "保存"}
+              </Button>
             </Space>
           </div>
         </Card>
@@ -355,6 +413,7 @@ export default function Orders() {
       <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => setView("list")}>返回</Button>
         <Typography.Title level={4} style={{ margin: 0 }}>销售单详情</Typography.Title>
+        <Button icon={<EditOutlined />} onClick={() => handleEdit(order.id)}>编辑</Button>
         <Button type="primary" icon={<PrinterOutlined />} onClick={handlePrint}>打印</Button>
       </div>
 
@@ -557,5 +616,60 @@ export default function Orders() {
         }
       `}</style>
     </div>
+  );
+}
+
+function OrderFilters({
+  onSearch,
+  onReset,
+}: {
+  onSearch: (filters: SalesOrderListParams) => void;
+  onReset: () => void;
+}) {
+  const [orderNumber, setOrderNumber] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+
+  const handleSearch = () => {
+    const nextFilters: SalesOrderListParams = {};
+    if (orderNumber.trim()) nextFilters.order_number = orderNumber.trim();
+    if (customerName.trim()) nextFilters.customer_name = customerName.trim();
+    if (dateRange?.[0]) nextFilters.start_date = dateRange[0].format("YYYY-MM-DD");
+    if (dateRange?.[1]) nextFilters.end_date = dateRange[1].format("YYYY-MM-DD");
+    onSearch(nextFilters);
+  };
+
+  const handleReset = () => {
+    setOrderNumber("");
+    setCustomerName("");
+    setDateRange(null);
+    onReset();
+  };
+
+  return (
+    <Space wrap>
+      <Input
+        placeholder="单号"
+        value={orderNumber}
+        onChange={(e) => setOrderNumber(e.target.value)}
+        onPressEnter={handleSearch}
+        allowClear
+        style={{ width: 180 }}
+      />
+      <Input
+        placeholder="客户名称"
+        value={customerName}
+        onChange={(e) => setCustomerName(e.target.value)}
+        onPressEnter={handleSearch}
+        allowClear
+        style={{ width: 180 }}
+      />
+      <DatePicker.RangePicker
+        value={dateRange}
+        onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
+      />
+      <Button type="primary" onClick={handleSearch}>查询</Button>
+      <Button onClick={handleReset}>重置</Button>
+    </Space>
   );
 }

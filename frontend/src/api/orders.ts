@@ -1,5 +1,12 @@
 import client from "./client";
 
+export interface SalesOrderListParams {
+  order_number?: string;
+  customer_name?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 export interface SalesOrderItem {
   id?: number;
   sales_order_id?: number;
@@ -39,10 +46,12 @@ export interface SalesOrderForm {
 }
 
 export const ordersApi = {
-  list: (params?: Record<string, unknown>) =>
+  list: (params?: SalesOrderListParams) =>
     client.get<SalesOrder[]>("/orders", { params }),
   get: (id: number) => client.get<SalesOrder>(`/orders/${id}`),
   create: (data: SalesOrderForm) =>
     client.post<SalesOrder>("/orders", data),
+  update: (id: number, data: SalesOrderForm) =>
+    client.put<SalesOrder>(`/orders/${id}`, data),
   delete: (id: number) => client.delete(`/orders/${id}`),
 };

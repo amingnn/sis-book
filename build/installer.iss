@@ -5,6 +5,7 @@
 #define MyAppExeName   "暮橙记账本.exe"
 #define MyAppVersion   "dev"
 #define MyAppPublisher "暮橙体育"
+#define MyAppIconFile  "..\build\assets\app-icon.ico"
 
 [Setup]
 AppId={{B8F2E3A1-5C4D-4E6F-8A9B-1C2D3E4F5A6B}
@@ -19,6 +20,10 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName={#MyAppName}
+#ifexist "..\build\assets\app-icon.ico"
+SetupIconFile={#MyAppIconFile}
+UninstallDisplayIcon={app}\{#MyAppExeName}
+#endif
 
 [Languages]
 Name: "default"; MessagesFile: "compiler:Default.isl"

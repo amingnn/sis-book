@@ -1,16 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from app.database import get_session
-from app.orders.models import SalesOrderCreate, SalesOrderResponse
-from app.orders.service import create_order, delete_order, get_order, list_orders
+from app.orders.models import SalesOrderCreate, SalesOrderResponse, SalesOrderUpdate
+from app.orders.service import (
+    create_order,
+    delete_order,
+    get_order,
+    list_orders,
+    update_order,
+)
 
 router = APIRouter(prefix="/api/orders", tags=["开单"])
 
 
 @router.get("", response_model=list[SalesOrderResponse])
-def api_list_orders(session: Session = Depends(get_session)):
-    return list_orders(session)
+def api_list_orders(
+    order_number: str | None = Query(None),
+    customer_name: str | None = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    session: Session = Depends(get_session),
+):
+    return list_orders(
+        session,
+        order_number=order_number,
+        customer_name=customer_name,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get("/{order_id}", response_model=SalesOrderResponse)
@@ -27,6 +47,17 @@ def api_create_order(
     session: Session = Depends(get_session),
 ):
     return create_order(session, data)
+
+
+@router.put("/{order_id}", response_model=SalesOrderResponse)
+def api_update_order(
+    order_id: int,
+    data: SalesOrderUpdate,
+    session: Session = Depends(get_session),
+):
+    if order := update_order(session, order_id, data):
+        return order
+    raise HTTPException(status_code=404, detail="销售单不存在")
 
 
 @router.delete("/{order_id}", status_code=204)
