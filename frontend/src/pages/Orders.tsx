@@ -12,6 +12,7 @@ import {
   Space,
   Table,
   Typography,
+  Upload,
 } from "antd";
 import {
   PlusOutlined,
@@ -20,6 +21,7 @@ import {
   EyeOutlined,
   ArrowLeftOutlined,
   EditOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
@@ -42,6 +44,7 @@ interface ItemRow {
   unit_price: number;
   box_size: string;
   notes: string;
+  image: string;
 }
 
 const PAYMENT_OPTIONS = [
@@ -68,7 +71,14 @@ function newItemRow(): ItemRow {
     unit_price: 0,
     box_size: "",
     notes: "",
+    image: "",
   };
+}
+
+function resolveImageSrc(image?: string): string {
+  if (!image) return "";
+  if (image.startsWith("data:") || image.startsWith("http")) return image;
+  return image.startsWith("/") ? image : `/${image}`;
 }
 
 export default function Orders() {
@@ -140,6 +150,7 @@ export default function Orders() {
         unit_price: Number(item.unit_price),
         box_size: item.box_size || "",
         notes: item.notes || "",
+        image: item.image || "",
       }))
     );
   };
@@ -190,6 +201,7 @@ export default function Orders() {
         unit_price: r.unit_price,
         box_size: r.box_size,
         notes: r.notes,
+        image: r.image,
       })),
     };
     const { data } = editingOrderId
@@ -321,6 +333,37 @@ export default function Orders() {
                 ),
               },
               {
+                title: "图片", dataIndex: "image", width: 110,
+                render: (_, record) => (
+                  <Space direction="vertical" size={6}>
+                    <Upload
+                      accept="image/*"
+                      showUploadList={false}
+                      beforeUpload={(file) => {
+                        const reader = new FileReader();
+                        reader.onload = () => updateItem(record.key, "image", String(reader.result || ""));
+                        reader.readAsDataURL(file);
+                        return false;
+                      }}
+                    >
+                      <Button size="small" icon={<UploadOutlined />}>选图</Button>
+                    </Upload>
+                    {record.image ? (
+                      <>
+                        <img
+                          src={resolveImageSrc(record.image)}
+                          alt="产品预览"
+                          style={{ width: 56, height: 56, objectFit: "contain", border: "1px solid #f0f0f0", borderRadius: 6 }}
+                        />
+                        <Button size="small" type="link" danger onClick={() => updateItem(record.key, "image", "")}>
+                          移除
+                        </Button>
+                      </>
+                    ) : null}
+                  </Space>
+                ),
+              },
+              {
                 title: "颜色", dataIndex: "color_spec", width: 100,
                 render: (_, record) => (
                   <Input value={record.color_spec} onChange={(e) => updateItem(record.key, "color_spec", e.target.value)} placeholder="颜色" />
@@ -445,6 +488,7 @@ export default function Orders() {
               <th style={{ width: 40 }}>编号</th>
               <th>产品</th>
               <th>颜色</th>
+              <th style={{ width: 88 }}>图片</th>
               <th style={{ width: 55 }}>总箱数</th>
               <th style={{ width: 65 }}>每箱数量</th>
               <th style={{ width: 55 }}>总数量</th>
@@ -460,6 +504,11 @@ export default function Orders() {
                 <td>{idx + 1}</td>
                 <td style={{ textAlign: "left" }}>{item.product_name}</td>
                 <td>{item.color_spec}</td>
+                <td>
+                  {item.image ? (
+                    <img src={resolveImageSrc(item.image)} alt={`${item.product_name} 图片`} className="slip-item-image" />
+                  ) : null}
+                </td>
                 <td>{item.total_boxes}</td>
                 <td>{item.per_box_qty}</td>
                 <td>{item.total_qty}</td>
@@ -471,7 +520,7 @@ export default function Orders() {
             ))}
             <tr className="slip-total-row">
               <td>合计</td>
-              <td colSpan={2}></td>
+              <td colSpan={3}></td>
               <td>{orderTotalBoxes}</td>
               <td></td>
               <td>{orderTotalQty}</td>
@@ -507,11 +556,11 @@ export default function Orders() {
           <tbody>
             <tr>
               <td>订货电话：18989438186　　QQ：1015352162</td>
-              <td style={{ textAlign: "right" }}>制单人：</td>
+              <td className="slip-sign-cell">制单人：</td>
             </tr>
             <tr>
               <td>订货地址：义乌市国际商贸城三区64号门25220店面</td>
-              <td style={{ textAlign: "right" }}>收货人(签字)：</td>
+              <td className="slip-sign-cell">收货人(签字)：</td>
             </tr>
           </tbody>
         </table>
@@ -521,12 +570,13 @@ export default function Orders() {
         .slip {
           max-width: 820px;
           margin: 0 auto;
-          padding: 24px 32px;
+          padding: 24px 28px 28px;
           background: #fff;
           border: 1px solid #e0e0e0;
           font-family: "SimSun", "宋体", serif;
           font-size: 13px;
           color: #333;
+          box-sizing: border-box;
         }
         .slip-title {
           text-align: center;
@@ -541,30 +591,41 @@ export default function Orders() {
         .slip-info {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 8px;
+          margin-bottom: 10px;
+          table-layout: fixed;
         }
         .slip-info td {
-          padding: 4px 0;
           font-size: 13px;
           border: 1px solid #999;
           padding: 5px 8px;
+          word-break: break-all;
         }
         .slip-table {
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 0;
+          table-layout: fixed;
         }
         .slip-table th,
         .slip-table td {
           border: 1px solid #999;
-          padding: 5px 4px;
+          padding: 6px 4px;
           text-align: center;
           font-size: 12px;
+          vertical-align: middle;
+          word-break: break-word;
         }
         .slip-table th {
           background: #d6eaf8;
           font-weight: 600;
           color: #1a5276;
+        }
+        .slip-item-image {
+          width: 64px;
+          height: 64px;
+          object-fit: contain;
+          display: block;
+          margin: 0 auto;
         }
         .slip-total-row td {
           font-weight: bold;
@@ -594,11 +655,18 @@ export default function Orders() {
           width: 100%;
           border-collapse: collapse;
           margin-top: 0;
+          table-layout: fixed;
         }
         .slip-footer-info td {
           border: 1px solid #999;
-          padding: 5px 8px;
+          padding: 8px 10px;
           font-size: 12px;
+          vertical-align: middle;
+        }
+        .slip-sign-cell {
+          width: 220px;
+          text-align: left;
+          white-space: nowrap;
         }
 
         @media print {
@@ -610,9 +678,19 @@ export default function Orders() {
             top: 0;
             width: 100%;
             border: none;
-            padding: 15px;
+            max-width: none;
+            padding: 12px 14px 18px;
           }
           .no-print { display: none !important; }
+          .slip-table tr,
+          .slip-info tr,
+          .slip-footer-info tr,
+          .slip-amount-row,
+          .slip-highlight-row,
+          .slip-notes-row {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
         }
       `}</style>
     </div>

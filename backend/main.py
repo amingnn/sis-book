@@ -151,9 +151,13 @@ def get_dashboard(session: Session = Depends(get_session)):
 
 BASE_DIR = _get_base_dir()
 frontend_dist = BASE_DIR / "frontend" / "dist"
+images_dir = get_data_dir() / "img"
+images_dir.mkdir(parents=True, exist_ok=True)
 _log(
     f"frozen={getattr(sys, 'frozen', False)}, BASE_DIR={BASE_DIR}, frontend_dist={frontend_dist}, exists={frontend_dist.exists()}"
 )
+
+app.mount("/img", StaticFiles(directory=str(images_dir)), name="images")
 
 if frontend_dist.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="static")

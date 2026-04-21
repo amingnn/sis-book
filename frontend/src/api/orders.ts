@@ -17,6 +17,7 @@ export interface SalesOrderItem {
   unit_price: number;
   box_size?: string;
   notes?: string;
+  image?: string;
 }
 
 export interface SalesOrder {
