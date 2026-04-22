@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from sqlmodel import Session, col, func, select
 
@@ -9,6 +10,7 @@ from app.orders.models import (
     SalesOrderUpdate,
 )
 from app.orders.images import store_order_item_image
+from app.sales.models import SalesRecord
 
 
 def _generate_order_number(session: Session, sales_date: date) -> str:
@@ -46,6 +48,62 @@ def get_order(session: Session, order_id: int) -> SalesOrder | None:
     return session.get(SalesOrder, order_id)
 
 
+def _calc_order_total(items: list[SalesOrderItem]) -> Decimal:
+    return sum(
+        (
+            Decimal(item.total_boxes)
+            * Decimal(item.per_box_qty)
+            * Decimal(str(item.unit_price))
+        )
+        for item in items
+    )
+
+
+def _build_order_product_summary(items: list[SalesOrderItem]) -> str:
+    names = [item.product_name.strip() for item in items if item.product_name.strip()]
+    if not names:
+        return "销售单商品"
+    if len(names) == 1:
+        return names[0]
+    return f"{names[0]} 等{len(names)}项"
+
+
+def _build_order_sales_notes(order: SalesOrder) -> str:
+    parts = [f"开单单号：{order.order_number}"]
+    if order.notes.strip():
+        parts.append(order.notes.strip())
+    return "\n".join(parts)
+
+
+def _sync_sales_record_for_order(session: Session, order: SalesOrder) -> None:
+    total_amount = _calc_order_total(order.items)
+    product_summary = _build_order_product_summary(order.items)
+
+    if order.sales_record_id:
+        record = session.get(SalesRecord, order.sales_record_id)
+    else:
+        record = None
+
+    if not record:
+        record = SalesRecord()
+
+    record.sale_time = order.sales_date
+    record.customer_name = order.customer_name
+    record.product = product_summary
+    record.amount = total_amount
+    record.delivery_time = order.delivery_date
+    record.collection_time = None
+    record.is_settled = False
+    record.payment_method = order.payment_terms
+    # 开单流程没有成本字段，先以金额兜底避免自动生成错误利润，后续可在销售记录中补充。
+    record.cost = total_amount
+    record.notes = _build_order_sales_notes(order)
+
+    session.add(record)
+    session.flush()
+    order.sales_record_id = record.id
+
+
 def create_order(session: Session, data: SalesOrderCreate) -> SalesOrder:
     order = SalesOrder(
         customer_name=data.customer_name,
@@ -70,6 +128,8 @@ def create_order(session: Session, data: SalesOrderCreate) -> SalesOrder:
         order.items.append(item)
 
     session.add(order)
+    session.flush()
+    _sync_sales_record_for_order(session, order)
     session.commit()
     session.refresh(order)
     return order
@@ -104,6 +164,8 @@ def update_order(
         order.items.append(SalesOrderItem(**item_payload))
 
     session.add(order)
+    session.flush()
+    _sync_sales_record_for_order(session, order)
     session.commit()
     session.refresh(order)
     return order
@@ -113,6 +175,8 @@ def delete_order(session: Session, order_id: int) -> bool:
     order = session.get(SalesOrder, order_id)
     if not order:
         return False
+    if order.sales_record_id and (record := session.get(SalesRecord, order.sales_record_id)):
+        session.delete(record)
     session.delete(order)
     session.commit()
     return True

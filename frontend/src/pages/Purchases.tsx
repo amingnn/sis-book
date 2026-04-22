@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Card,
@@ -10,11 +10,16 @@ import {
   Modal,
   Popconfirm,
   Space,
-  Tag,
   Table,
   Typography,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import {
@@ -133,16 +138,6 @@ export default function Purchases() {
     fetchData(filters);
   };
 
-  const totalAmount = useMemo(
-    () => data.reduce((sum, r) => sum + Number(r.total_amount), 0),
-    [data],
-  );
-  const settledCount = useMemo(() => data.filter((item) => item.is_settled).length, [data]);
-  const unsettledCount = useMemo(
-    () => data.filter((item) => !item.is_settled).length,
-    [data],
-  );
-
   const columns: ColumnsType<PurchaseOrder> = [
     {
       title: "时间",
@@ -195,12 +190,11 @@ export default function Purchases() {
       render: (v: number) => `¥${Number(v).toFixed(2)}`,
     },
     {
-      title: "结清状态",
-      dataIndex: "is_settled",
+      title: "已结金额",
+      dataIndex: "paid_amount",
       width: 110,
-      align: "center",
-      render: (value: boolean) =>
-        value ? <Tag color="green">已结清</Tag> : <Tag color="orange">未结清</Tag>,
+      align: "right",
+      render: (value: number) => `¥${Number(value).toFixed(2)}`,
     },
     {
       title: "备注",
@@ -210,13 +204,25 @@ export default function Purchases() {
     },
     {
       title: "操作",
-      width: 180,
+      key: "actions",
+      width: 220,
+      fixed: "right",
       render: (_, record) => (
-        <Space>
-          <a onClick={() => openSupplierHistory(record.supplier_name)}>厂家历史</a>
-          <a onClick={() => openEdit(record)}>编辑</a>
+        <Space size="small">
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => openSupplierHistory(record.supplier_name)}
+          >
+            查看
+          </Button>
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+            编辑
+          </Button>
           <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
-            <a style={{ color: "#ff4d4f" }}>删除</a>
+            <Button size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
           </Popconfirm>
         </Space>
       ),
@@ -225,25 +231,18 @@ export default function Purchases() {
 
   return (
     <div>
-      <Typography.Title level={4}>采购单</Typography.Title>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          采购单
+        </Typography.Title>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          新增采购
+        </Button>
+      </div>
 
       <FilterBar onSearch={handleSearch} />
 
-      <Card
-        title={`共 ${data.length} 条记录`}
-        extra={
-          <Space>
-            <Typography.Text type="secondary">
-              已结清 {settledCount} 条 / 未结清 {unsettledCount} 条
-            </Typography.Text>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新增采购
-            </Button>
-          </Space>
-        }
-        style={{ marginTop: 16 }}
-        styles={{ header: { whiteSpace: "nowrap" } }}
-      >
+      <Card style={{ marginTop: 16 }}>
         <Table
           rowKey="id"
           columns={columns}
@@ -251,22 +250,6 @@ export default function Purchases() {
           loading={loading}
           pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
           scroll={{ x: 1380 }}
-          summary={() => (
-            <Table.Summary fixed>
-              <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={7} align="right">
-                  <strong>合计金额</strong>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={7} align="right">
-                  <strong>¥{totalAmount.toFixed(2)}</strong>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={8} align="center">
-                  <strong>{settledCount} / {unsettledCount}</strong>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={9} colSpan={2} />
-              </Table.Summary.Row>
-            </Table.Summary>
-          )}
         />
       </Card>
 
@@ -323,12 +306,11 @@ function SupplierHistoryModal({
       render: (value: number) => `¥${Number(value).toFixed(2)}`,
     },
     {
-      title: "结清状态",
-      dataIndex: "is_settled",
-      width: 110,
-      align: "center",
-      render: (value: boolean) =>
-        value ? <Tag color="green">已结清</Tag> : <Tag color="orange">未结清</Tag>,
+      title: "已结多少钱",
+      dataIndex: "paid_amount",
+      width: 120,
+      align: "right",
+      render: (value: number) => `¥${Number(value).toFixed(2)}`,
     },
     { title: "备注", dataIndex: "notes", width: 220, ellipsis: true },
   ];
@@ -391,6 +373,7 @@ function FilterBar({
       <Space wrap>
         <Input
           placeholder="厂家名称"
+          prefix={<SearchOutlined />}
           value={supplier}
           onChange={(e) => setSupplier(e.target.value)}
           onPressEnter={handleSearch}
@@ -399,6 +382,7 @@ function FilterBar({
         />
         <Input
           placeholder="货物名称"
+          prefix={<SearchOutlined />}
           value={product}
           onChange={(e) => setProduct(e.target.value)}
           onPressEnter={handleSearch}
@@ -406,6 +390,8 @@ function FilterBar({
           style={{ width: 180 }}
         />
         <RangePicker
+          allowClear
+          placeholder={["开始日期", "结束日期"]}
           value={dates as [dayjs.Dayjs, dayjs.Dayjs] | null}
           onChange={(val) =>
             setDates(val as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)
