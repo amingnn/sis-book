@@ -76,9 +76,17 @@ def _migration_2_backfill_order_level_images(conn) -> None:
         )
 
 
+def _migration_3_add_sales_collection_time(conn) -> None:
+    inspector = inspect(conn)
+    columns = {column["name"] for column in inspector.get_columns("salesrecord")}
+    if "collection_time" not in columns:
+        conn.execute(text("ALTER TABLE salesrecord ADD COLUMN collection_time DATE"))
+
+
 MIGRATIONS = [
     Migration(1, "add_salesorderitem_image", _migration_1_add_salesorderitem_image),
     Migration(2, "backfill_order_level_images", _migration_2_backfill_order_level_images),
+    Migration(3, "add_sales_collection_time", _migration_3_add_sales_collection_time),
 ]
 
 

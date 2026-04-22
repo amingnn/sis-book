@@ -6,7 +6,16 @@ from sqlmodel import Session, col, func, select
 from app.sales.models import SalesRecord, SalesRecordCreate, SalesRecordUpdate
 
 
-def _apply_filters(statement, *, customer_name: str | None, is_settled: bool | None, start_date: date | None, end_date: date | None):
+def _apply_filters(
+    statement,
+    *,
+    customer_name: str | None,
+    is_settled: bool | None,
+    start_date: date | None,
+    end_date: date | None,
+    due_collection: bool = False,
+    due_date: date | None = None,
+):
     if customer_name:
         statement = statement.where(col(SalesRecord.customer_name).contains(customer_name))
     if is_settled is not None:
@@ -15,6 +24,10 @@ def _apply_filters(statement, *, customer_name: str | None, is_settled: bool | N
         statement = statement.where(col(SalesRecord.sale_time) >= start_date)
     if end_date:
         statement = statement.where(col(SalesRecord.sale_time) <= end_date)
+    if due_collection:
+        target_date = due_date or date.today()
+        statement = statement.where(col(SalesRecord.collection_time).is_not(None))
+        statement = statement.where(col(SalesRecord.collection_time) <= target_date)
     return statement
 
 
@@ -24,9 +37,17 @@ def list_records(
     is_settled: bool | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    due_collection: bool = False,
 ) -> list[SalesRecord]:
     stmt = select(SalesRecord).order_by(col(SalesRecord.sale_time).desc())
-    stmt = _apply_filters(stmt, customer_name=customer_name, is_settled=is_settled, start_date=start_date, end_date=end_date)
+    stmt = _apply_filters(
+        stmt,
+        customer_name=customer_name,
+        is_settled=is_settled,
+        start_date=start_date,
+        end_date=end_date,
+        due_collection=due_collection,
+    )
     return list(session.exec(stmt).all())
 
 
@@ -68,12 +89,20 @@ def get_summary(
     is_settled: bool | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    due_collection: bool = False,
 ) -> dict:
     stmt = select(
         func.coalesce(func.sum(SalesRecord.amount), 0),
         func.coalesce(func.sum(SalesRecord.cost), 0),
     ).select_from(SalesRecord)
-    stmt = _apply_filters(stmt, customer_name=customer_name, is_settled=is_settled, start_date=start_date, end_date=end_date)
+    stmt = _apply_filters(
+        stmt,
+        customer_name=customer_name,
+        is_settled=is_settled,
+        start_date=start_date,
+        end_date=end_date,
+        due_collection=due_collection,
+    )
     total_amount, total_cost = session.exec(stmt).one()
     total_amount = Decimal(str(total_amount))
     total_cost = Decimal(str(total_cost))
@@ -81,7 +110,14 @@ def get_summary(
     avg_margin = float(total_profit / total_amount * 100) if total_amount else 0.0
 
     unsettled_stmt = select(func.count()).select_from(SalesRecord).where(col(SalesRecord.is_settled) == False)  # noqa: E712
-    unsettled_stmt = _apply_filters(unsettled_stmt, customer_name=customer_name, is_settled=None, start_date=start_date, end_date=end_date)
+    unsettled_stmt = _apply_filters(
+        unsettled_stmt,
+        customer_name=customer_name,
+        is_settled=None,
+        start_date=start_date,
+        end_date=end_date,
+        due_collection=due_collection,
+    )
     unsettled_count = session.exec(unsettled_stmt).one()
 
     return {
@@ -90,4 +126,41 @@ def get_summary(
         "total_profit": total_profit,
         "avg_margin": round(avg_margin, 2),
         "unsettled_count": unsettled_count,
+    }
+
+
+def get_due_collection_summary(session: Session, due_date: date) -> dict:
+    stmt = (
+        select(
+            func.count(SalesRecord.id),
+            func.coalesce(func.sum(SalesRecord.amount), 0),
+        )
+        .where(col(SalesRecord.is_settled) == False)  # noqa: E712
+        .where(col(SalesRecord.collection_time).is_not(None))
+        .where(col(SalesRecord.collection_time) <= due_date)
+    )
+    due_count, due_amount = session.exec(stmt).one()
+
+    due_records = session.exec(
+        select(SalesRecord)
+        .where(col(SalesRecord.is_settled) == False)  # noqa: E712
+        .where(col(SalesRecord.collection_time).is_not(None))
+        .where(col(SalesRecord.collection_time) <= due_date)
+        .order_by(col(SalesRecord.collection_time).asc(), col(SalesRecord.sale_time).desc())
+        .limit(5)
+    ).all()
+
+    return {
+        "due_collection_count": due_count,
+        "due_collection_amount": float(Decimal(str(due_amount))),
+        "due_collection_records": [
+            {
+                "id": record.id,
+                "customer_name": record.customer_name,
+                "product": record.product,
+                "amount": float(record.amount),
+                "collection_time": record.collection_time.isoformat() if record.collection_time else None,
+            }
+            for record in due_records
+        ],
     }

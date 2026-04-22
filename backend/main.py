@@ -16,6 +16,7 @@ from app.database import get_session, init_db
 from app.orders.router import router as orders_router
 from app.purchases.models import PurchaseOrder
 from app.purchases.router import router as purchases_router
+from app.sales import service as sales_service
 from app.sales.models import SalesRecord
 from app.sales.router import router as sales_router
 from fastapi import Depends, FastAPI
@@ -110,6 +111,7 @@ def get_dashboard(session: Session = Depends(get_session)):
     recent_purchases = session.exec(
         select(PurchaseOrder).order_by(PurchaseOrder.purchase_time.desc()).limit(5)
     ).all()
+    due_collection = sales_service.get_due_collection_summary(session, today)
 
     month_sales = Decimal(str(month_sales))
     month_cost = Decimal(str(month_cost))
@@ -125,6 +127,9 @@ def get_dashboard(session: Session = Depends(get_session)):
         "year_profit": float(year_sales - year_cost),
         "unsettled_count": unsettled_count,
         "unsettled_amount": float(Decimal(str(unsettled_amount))),
+        "due_collection_count": due_collection["due_collection_count"],
+        "due_collection_amount": due_collection["due_collection_amount"],
+        "due_collection_records": due_collection["due_collection_records"],
         "recent_sales": [
             {
                 "id": r.id,

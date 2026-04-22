@@ -7,6 +7,7 @@ export interface SalesRecord {
   product: string;
   amount: number;
   delivery_time: string | null;
+  collection_time: string | null;
   is_settled: boolean;
   payment_method: string;
   cost: number;
@@ -22,6 +23,7 @@ export interface SalesRecordForm {
   product: string;
   amount: number;
   delivery_time?: string | null;
+  collection_time?: string | null;
   is_settled?: boolean;
   payment_method?: string;
   cost: number;

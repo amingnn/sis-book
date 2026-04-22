@@ -28,6 +28,15 @@ interface DashboardData {
   year_profit: number;
   unsettled_count: number;
   unsettled_amount: number;
+  due_collection_count: number;
+  due_collection_amount: number;
+  due_collection_records: {
+    id: number;
+    customer_name: string;
+    product: string;
+    amount: number;
+    collection_time: string | null;
+  }[];
   recent_sales: {
     id: number;
     sale_time: string;
@@ -155,6 +164,17 @@ export default function Dashboard() {
           title={`有 ${data.unsettled_count} 笔未结清订单，合计 ¥${Number(data.unsettled_amount).toFixed(2)}`}
           description="点击查看未结清订单"
           onClick={() => navigate("/sales?settled=unsettled")}
+        />
+      )}
+
+      {data.due_collection_count > 0 && (
+        <Alert
+          style={{ marginTop: 16, cursor: "pointer" }}
+          type="error"
+          showIcon
+          title={`有 ${data.due_collection_count} 笔到期收款记录，合计 ¥${Number(data.due_collection_amount).toFixed(2)}`}
+          description="点击查看收款时间已到的未结清记录"
+          onClick={() => navigate("/sales?due=collection")}
         />
       )}
 
