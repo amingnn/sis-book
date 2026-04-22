@@ -19,6 +19,7 @@ import {
 import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { useSearchParams } from "react-router-dom";
 import {
   salesApi,
   type SalesRecord,
@@ -29,6 +30,7 @@ import {
 const { RangePicker } = DatePicker;
 
 export default function SalesRecords() {
+  const [searchParams] = useSearchParams();
   const [records, setRecords] = useState<SalesRecord[]>([]);
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,16 +44,25 @@ export default function SalesRecords() {
     [dayjs.Dayjs, dayjs.Dayjs] | null
   >(null);
 
+  useEffect(() => {
+    const settledParam = searchParams.get("settled");
+    const dueParam = searchParams.get("due");
+    if (settledParam === "unsettled" || dueParam === "collection") {
+      setIsSettled(false);
+    }
+  }, [searchParams]);
+
   const buildParams = useCallback(() => {
     const params: Record<string, unknown> = {};
     if (customerName) params.customer_name = customerName;
     if (isSettled !== undefined) params.is_settled = isSettled;
+    if (searchParams.get("due") === "collection") params.due_collection = true;
     if (dateRange) {
       params.start_date = dateRange[0].format("YYYY-MM-DD");
       params.end_date = dateRange[1].format("YYYY-MM-DD");
     }
     return params;
-  }, [customerName, isSettled, dateRange]);
+  }, [customerName, isSettled, dateRange, searchParams]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -87,6 +98,7 @@ export default function SalesRecords() {
       ...record,
       sale_time: dayjs(record.sale_time),
       delivery_time: record.delivery_time ? dayjs(record.delivery_time) : null,
+      collection_time: record.collection_time ? dayjs(record.collection_time) : null,
     });
     setModalOpen(true);
   };
@@ -108,6 +120,7 @@ export default function SalesRecords() {
         ...values,
         sale_time: values.sale_time.format("YYYY-MM-DD"),
         delivery_time: values.delivery_time?.format("YYYY-MM-DD") ?? null,
+        collection_time: values.collection_time?.format("YYYY-MM-DD") ?? null,
       };
       if (editingId) {
         await salesApi.update(editingId, data);
@@ -139,6 +152,16 @@ export default function SalesRecords() {
       dataIndex: "delivery_time",
       width: 110,
       render: (v: string) => v || "-",
+    },
+    {
+      title: "收款时间",
+      dataIndex: "collection_time",
+      width: 120,
+      render: (v: string | null, record) => {
+        if (!v) return "-";
+        const isDue = !record.is_settled && dayjs(v).isBefore(dayjs().add(1, "day"), "day");
+        return isDue ? <Tag color="orange">{v}</Tag> : v;
+      },
     },
     {
       title: "是否结清",
@@ -250,17 +273,17 @@ export default function SalesRecords() {
                   <Table.Summary.Cell index={3} align="right">
                     <strong>¥{Number(summary.total_amount).toFixed(2)}</strong>
                   </Table.Summary.Cell>
-                  <Table.Summary.Cell index={4} colSpan={3} />
-                  <Table.Summary.Cell index={7} align="right">
+                  <Table.Summary.Cell index={4} colSpan={4} />
+                  <Table.Summary.Cell index={8} align="right">
                     <strong>¥{Number(summary.total_cost).toFixed(2)}</strong>
                   </Table.Summary.Cell>
-                  <Table.Summary.Cell index={8} align="right">
+                  <Table.Summary.Cell index={9} align="right">
                     <strong>¥{Number(summary.total_profit).toFixed(2)}</strong>
                   </Table.Summary.Cell>
-                  <Table.Summary.Cell index={9} align="right">
+                  <Table.Summary.Cell index={10} align="right">
                     <strong>{Number(summary.avg_margin).toFixed(2)}%</strong>
                   </Table.Summary.Cell>
-                  <Table.Summary.Cell index={10} colSpan={2}>
+                  <Table.Summary.Cell index={11} colSpan={2}>
                     未结清: {summary.unsettled_count} 笔
                   </Table.Summary.Cell>
                 </Table.Summary.Row>
@@ -322,6 +345,11 @@ export default function SalesRecords() {
             <Form.Item name="delivery_time" label="收货时间">
               <DatePicker style={{ width: "100%" }} />
             </Form.Item>
+            <Form.Item name="collection_time" label="收款时间">
+              <DatePicker style={{ width: "100%" }} />
+            </Form.Item>
+          </Space>
+          <Space style={{ display: "flex", gap: 16 }}>
             <Form.Item name="payment_method" label="交易方式">
               <Input />
             </Form.Item>

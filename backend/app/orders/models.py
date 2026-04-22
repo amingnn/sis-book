@@ -12,6 +12,7 @@ class SalesOrderItemBase(SQLModel):
     unit_price: Decimal = Field(max_digits=12, decimal_places=2)
     box_size: str = ""
     notes: str = ""
+    image: str = ""
 
 
 class SalesOrderItem(SalesOrderItemBase, table=True):
@@ -46,6 +47,10 @@ class SalesOrderItemCreate(SalesOrderItemBase):
 
 
 class SalesOrderCreate(SalesOrderBase):
+    items: list[SalesOrderItemCreate]
+
+
+class SalesOrderUpdate(SalesOrderBase):
     items: list[SalesOrderItemCreate]
 
 

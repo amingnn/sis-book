@@ -16,9 +16,17 @@ def read_summary(
     is_settled: bool | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
+    due_collection: bool = Query(False),
     session: Session = Depends(get_session),
 ):
-    return service.get_summary(session, customer_name, is_settled, start_date, end_date)
+    return service.get_summary(
+        session,
+        customer_name,
+        is_settled,
+        start_date,
+        end_date,
+        due_collection,
+    )
 
 
 @router.get("", response_model=list[SalesRecordResponse])
@@ -27,9 +35,17 @@ def read_records(
     is_settled: bool | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
+    due_collection: bool = Query(False),
     session: Session = Depends(get_session),
 ):
-    return service.list_records(session, customer_name, is_settled, start_date, end_date)
+    return service.list_records(
+        session,
+        customer_name,
+        is_settled,
+        start_date,
+        end_date,
+        due_collection,
+    )
 
 
 @router.get("/{record_id}", response_model=SalesRecordResponse)

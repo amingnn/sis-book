@@ -10,6 +10,8 @@ from PyInstaller.utils.hooks import collect_all
 # spec 文件上级目录即项目根目录
 ROOT = Path(SPECPATH).parent.resolve()   # noqa: F821
 APP_NAME = '暮橙记账本'  # APP 名
+WINDOWS_ICON = ROOT / 'build' / 'assets' / 'app-icon.ico'
+MAC_ICON = ROOT / 'build' / 'assets' / 'app-icon.icns'
 
 extra_datas = []
 extra_binaries = []
@@ -68,6 +70,7 @@ exe = EXE(  # noqa: F821
     upx=True,
     console=False,
     disable_windowed_traceback=False,
+    icon=str(WINDOWS_ICON) if WINDOWS_ICON.exists() else None,
 )
 
 coll = COLLECT(  # noqa: F821
@@ -85,9 +88,7 @@ if sys.platform == 'darwin':
     app = BUNDLE(  # noqa: F821
         coll, # 将上面收集好的散装零件作为输入
         name='暮橙记账本.app', # 最终生成的 App 包名
-        # 建议在项目根目录创建 assets 文件夹放图标
-        # icon=os.path.join(ROOT, 'assets', 'icon.icns'), 
-        icon=None, 
+        icon=str(MAC_ICON) if MAC_ICON.exists() else None,
         bundle_identifier='com.sisbook', # 唯一的 ID
         info_plist={
             'CFBundleDisplayName': APP_NAME,

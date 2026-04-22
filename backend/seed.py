@@ -53,6 +53,7 @@ def seed():
             box_count=box_count,
             per_box_qty=per_box_qty,
             unit_price=unit_price,
+            paid_amount=Decimal(str(round(random.uniform(0, float(unit_price * box_count * per_box_qty)), 2))),
             notes=random.choice(["", "", "", "中包贴标签", "常规包装", "客户提供标签"]),
         )
         session.add(po)

@@ -33,17 +33,29 @@ export default function AppLayout() {
       >
         <div
           style={{
-            height: 48,
+            height: 64,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            gap: collapsed ? 0 : 10,
             fontWeight: 700,
-            fontSize: collapsed ? 14 : 16,
-            color: "#1677ff",
+            fontSize: collapsed ? 12 : 16,
+            color: "#d95f0e",
             borderBottom: "1px solid #f0f0f0",
+            padding: collapsed ? 8 : "0 12px",
           }}
         >
-          {collapsed ? "暮橙" : "暮橙体育记账本"}
+          <img
+            src="/branding/app-icon-192.png"
+            alt="暮橙体育记账本图标"
+            style={{
+              width: collapsed ? 26 : 30,
+              height: collapsed ? 26 : 30,
+              borderRadius: 8,
+              flexShrink: 0,
+            }}
+          />
+          {!collapsed ? <span>暮橙体育记账本</span> : null}
         </div>
         <Menu
           mode="inline"

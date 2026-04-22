@@ -11,6 +11,7 @@ class SalesRecordBase(SQLModel):
     product: str
     amount: Decimal = Field(max_digits=12, decimal_places=2)
     delivery_time: date | None = None
+    collection_time: date | None = None
     is_settled: bool = False
     payment_method: str = ""
     cost: Decimal = Field(max_digits=12, decimal_places=2)
@@ -32,6 +33,7 @@ class SalesRecordUpdate(SQLModel):
     product: str | None = None
     amount: Decimal | None = None
     delivery_time: date | None = None
+    collection_time: date | None = None
     is_settled: bool | None = None
     payment_method: str | None = None
     cost: Decimal | None = None
