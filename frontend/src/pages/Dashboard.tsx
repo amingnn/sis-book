@@ -77,7 +77,7 @@ export default function Dashboard() {
   if (!data) return null;
 
   const salesColumns = [
-    { title: "时间", dataIndex: "sale_time", key: "sale_time" },
+    { title: "时间", dataIndex: "sale_time", key: "sale_time", width: 120 },
     { title: "客户", dataIndex: "customer_name", key: "customer_name" },
     { title: "产品", dataIndex: "product", key: "product" },
     {
@@ -96,7 +96,7 @@ export default function Dashboard() {
   ];
 
   const purchaseColumns = [
-    { title: "时间", dataIndex: "purchase_time", key: "purchase_time" },
+    { title: "时间", dataIndex: "purchase_time", key: "purchase_time", width: 120 },
     { title: "厂家", dataIndex: "supplier_name", key: "supplier_name" },
     { title: "货物", dataIndex: "product_name", key: "product_name" },
     {

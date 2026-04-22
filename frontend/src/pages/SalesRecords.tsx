@@ -16,7 +16,12 @@ import {
   Typography,
   message,
 } from "antd";
-import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
@@ -24,7 +29,6 @@ import {
   salesApi,
   type SalesRecord,
   type SalesRecordForm,
-  type SalesSummary,
 } from "../api/sales";
 
 const { RangePicker } = DatePicker;
@@ -32,7 +36,6 @@ const { RangePicker } = DatePicker;
 export default function SalesRecords() {
   const [searchParams] = useSearchParams();
   const [records, setRecords] = useState<SalesRecord[]>([]);
-  const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -40,6 +43,7 @@ export default function SalesRecords() {
 
   const [customerName, setCustomerName] = useState("");
   const [isSettled, setIsSettled] = useState<boolean | undefined>();
+  const [isDueCollection, setIsDueCollection] = useState<boolean | undefined>();
   const [dateRange, setDateRange] = useState<
     [dayjs.Dayjs, dayjs.Dayjs] | null
   >(null);
@@ -49,37 +53,44 @@ export default function SalesRecords() {
     const dueParam = searchParams.get("due");
     if (settledParam === "unsettled" || dueParam === "collection") {
       setIsSettled(false);
+    } else {
+      setIsSettled(undefined);
     }
+    setIsDueCollection(dueParam === "collection" ? true : undefined);
   }, [searchParams]);
 
   const buildParams = useCallback(() => {
     const params: Record<string, unknown> = {};
     if (customerName) params.customer_name = customerName;
     if (isSettled !== undefined) params.is_settled = isSettled;
-    if (searchParams.get("due") === "collection") params.due_collection = true;
+    if (isDueCollection) params.due_collection = true;
     if (dateRange) {
       params.start_date = dateRange[0].format("YYYY-MM-DD");
       params.end_date = dateRange[1].format("YYYY-MM-DD");
     }
     return params;
-  }, [customerName, isSettled, dateRange, searchParams]);
+  }, [customerName, isSettled, isDueCollection, dateRange]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const params = buildParams();
-      const [listRes, summaryRes] = await Promise.all([
-        salesApi.list(params),
-        salesApi.summary(params),
-      ]);
+      const listRes = await salesApi.list(params);
       setRecords(listRes.data);
-      setSummary(summaryRes.data);
     } catch {
       message.error("加载数据失败");
     } finally {
       setLoading(false);
     }
   }, [buildParams]);
+
+  const handleResetFilters = () => {
+    const dueParam = searchParams.get("due");
+    setCustomerName("");
+    setDateRange(null);
+    setIsSettled(dueParam === "collection" ? false : undefined);
+    setIsDueCollection(dueParam === "collection" ? true : undefined);
+  };
 
   useEffect(() => {
     fetchData();
@@ -137,20 +148,20 @@ export default function SalesRecords() {
   };
 
   const columns: ColumnsType<SalesRecord> = [
-    { title: "时间", dataIndex: "sale_time", width: 110 },
+    { title: "时间", dataIndex: "sale_time", width: 120 },
     { title: "客户名称", dataIndex: "customer_name", width: 120 },
     { title: "产品", dataIndex: "product", width: 120 },
     {
       title: "金额",
       dataIndex: "amount",
-      width: 100,
+      width: 110,
       align: "right",
       render: (v: number | string) => `¥${Number(v).toFixed(2)}`,
     },
     {
       title: "收货时间",
       dataIndex: "delivery_time",
-      width: 110,
+      width: 120,
       render: (v: string) => v || "-",
     },
     {
@@ -176,34 +187,43 @@ export default function SalesRecords() {
     {
       title: "成本",
       dataIndex: "cost",
-      width: 100,
+      width: 110,
       align: "right",
       render: (v: number | string) => `¥${Number(v).toFixed(2)}`,
     },
     {
       title: "毛利润",
       dataIndex: "gross_profit",
-      width: 100,
+      width: 110,
       align: "right",
       render: (v: number | string) => `¥${Number(v).toFixed(2)}`,
     },
     {
       title: "利润率",
       dataIndex: "profit_margin",
-      width: 90,
+      width: 100,
       align: "right",
       render: (v: number | string) => `${Number(v).toFixed(2)}%`,
     },
-    { title: "备注", dataIndex: "notes", ellipsis: true },
+    {
+      title: "备注",
+      dataIndex: "notes",
+      width: 220,
+      ellipsis: true,
+    },
     {
       title: "操作",
-      width: 120,
+      width: 110,
       fixed: "right",
       render: (_, record) => (
         <Space size="small">
-          <a onClick={() => handleEdit(record)}>编辑</a>
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            编辑
+          </Button>
           <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
-            <a style={{ color: "#ff4d4f" }}>删除</a>
+            <Button size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
           </Popconfirm>
         </Space>
       ),
@@ -212,7 +232,14 @@ export default function SalesRecords() {
 
   return (
     <div>
-      <Typography.Title level={4}>销售记录</Typography.Title>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          销售记录
+        </Typography.Title>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          新增销售记录
+        </Button>
+      </div>
 
       <Card style={{ marginBottom: 16 }}>
         <Space wrap>
@@ -236,7 +263,19 @@ export default function SalesRecords() {
               { label: "未结清", value: false },
             ]}
           />
+          <Select
+            placeholder="是否到期"
+            allowClear
+            value={isDueCollection}
+            onChange={(v) => setIsDueCollection(v)}
+            style={{ width: 120 }}
+            options={[
+              { label: "已到期", value: true },
+            ]}
+          />
           <RangePicker
+            allowClear
+            placeholder={["开始日期", "结束日期"]}
             value={dateRange}
             onChange={(dates) =>
               setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)
@@ -245,9 +284,7 @@ export default function SalesRecords() {
           <Button type="primary" onClick={fetchData}>
             查询
           </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增
-          </Button>
+          <Button onClick={handleResetFilters}>重置</Button>
         </Space>
       </Card>
 
@@ -257,39 +294,12 @@ export default function SalesRecords() {
           columns={columns}
           dataSource={records}
           loading={loading}
-          scroll={{ x: 1300 }}
+          scroll={{ x: 1490 }}
           pagination={{
             pageSize: 20,
             showSizeChanger: true,
             showTotal: (t) => `共 ${t} 条`,
           }}
-          summary={() =>
-            summary ? (
-              <Table.Summary fixed>
-                <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={3}>
-                    <strong>合计</strong>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={3} align="right">
-                    <strong>¥{Number(summary.total_amount).toFixed(2)}</strong>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={4} colSpan={4} />
-                  <Table.Summary.Cell index={8} align="right">
-                    <strong>¥{Number(summary.total_cost).toFixed(2)}</strong>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={9} align="right">
-                    <strong>¥{Number(summary.total_profit).toFixed(2)}</strong>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={10} align="right">
-                    <strong>{Number(summary.avg_margin).toFixed(2)}%</strong>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={11} colSpan={2}>
-                    未结清: {summary.unsettled_count} 笔
-                  </Table.Summary.Cell>
-                </Table.Summary.Row>
-              </Table.Summary>
-            ) : null
-          }
         />
       </Card>
 
