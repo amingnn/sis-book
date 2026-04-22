@@ -7,6 +7,7 @@ from app.database import get_session
 
 from .models import (
     PurchaseOrderCreate,
+    PurchaseOrderPage,
     PurchaseOrderResponse,
     PurchaseOrderUpdate,
 )
@@ -29,6 +30,18 @@ def list_purchases(
         product_name=product_name,
         start_date=start_date,
         end_date=end_date,
+    )
+
+
+@router.get("/supplier-history", response_model=PurchaseOrderPage)
+def get_supplier_purchase_page(
+    supplier_name: str = Query(...),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
+    session: Session = Depends(get_session),
+):
+    return service.get_supplier_purchase_page(
+        session, supplier_name=supplier_name, page=page, page_size=page_size
     )
 
 

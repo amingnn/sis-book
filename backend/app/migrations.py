@@ -83,10 +83,22 @@ def _migration_3_add_sales_collection_time(conn) -> None:
         conn.execute(text("ALTER TABLE salesrecord ADD COLUMN collection_time DATE"))
 
 
+def _migration_4_add_purchase_paid_amount(conn) -> None:
+    inspector = inspect(conn)
+    columns = {column["name"] for column in inspector.get_columns("purchaseorder")}
+    if "paid_amount" not in columns:
+        conn.execute(
+            text(
+                "ALTER TABLE purchaseorder ADD COLUMN paid_amount NUMERIC NOT NULL DEFAULT 0"
+            )
+        )
+
+
 MIGRATIONS = [
     Migration(1, "add_salesorderitem_image", _migration_1_add_salesorderitem_image),
     Migration(2, "backfill_order_level_images", _migration_2_backfill_order_level_images),
     Migration(3, "add_sales_collection_time", _migration_3_add_sales_collection_time),
+    Migration(4, "add_purchase_paid_amount", _migration_4_add_purchase_paid_amount),
 ]
 
 

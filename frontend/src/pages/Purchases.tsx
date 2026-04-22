@@ -10,6 +10,7 @@ import {
   Modal,
   Popconfirm,
   Space,
+  Tag,
   Table,
   Typography,
 } from "antd";
@@ -20,6 +21,7 @@ import {
   purchasesApi,
   type PurchaseOrder,
   type PurchaseOrderForm,
+  type PurchaseOrderPage,
 } from "../api/purchases";
 
 const { RangePicker } = DatePicker;
@@ -29,14 +31,18 @@ export default function Purchases() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [supplierHistoryOpen, setSupplierHistoryOpen] = useState(false);
+  const [supplierHistoryName, setSupplierHistoryName] = useState("");
+  const [supplierHistory, setSupplierHistory] = useState<PurchaseOrderPage | null>(null);
+  const [supplierHistoryLoading, setSupplierHistoryLoading] = useState(false);
   const [form] = Form.useForm<PurchaseOrderForm>();
   const [filters, setFilters] = useState<Record<string, unknown>>({});
 
   const fetchData = async (params?: Record<string, unknown>) => {
     setLoading(true);
     try {
-      const res = await purchasesApi.list(params);
-      setData(res.data);
+      const listRes = await purchasesApi.list(params);
+      setData(listRes.data);
     } finally {
       setLoading(false);
     }
@@ -45,6 +51,30 @@ export default function Purchases() {
   useEffect(() => {
     fetchData(filters);
   }, [filters]);
+
+  const fetchSupplierHistory = async (
+    supplierName: string,
+    page = 1,
+    pageSize = 10,
+  ) => {
+    setSupplierHistoryLoading(true);
+    try {
+      const res = await purchasesApi.supplierHistory({
+        supplier_name: supplierName,
+        page,
+        page_size: pageSize,
+      });
+      setSupplierHistory(res.data);
+    } finally {
+      setSupplierHistoryLoading(false);
+    }
+  };
+
+  const openSupplierHistory = async (supplierName: string) => {
+    setSupplierHistoryName(supplierName);
+    setSupplierHistoryOpen(true);
+    await fetchSupplierHistory(supplierName);
+  };
 
   const handleSearch = (
     supplierName: string,
@@ -62,7 +92,10 @@ export default function Purchases() {
   const openCreate = () => {
     setEditingId(null);
     form.resetFields();
-    form.setFieldsValue({ purchase_time: dayjs().format("YYYY-MM-DD") });
+    form.setFieldsValue({
+      purchase_time: dayjs().format("YYYY-MM-DD"),
+      paid_amount: 0,
+    });
     setModalOpen(true);
   };
 
@@ -75,6 +108,7 @@ export default function Purchases() {
       box_count: record.box_count,
       per_box_qty: record.per_box_qty,
       unit_price: record.unit_price,
+      paid_amount: record.paid_amount,
       notes: record.notes,
     });
     setModalOpen(true);
@@ -103,6 +137,11 @@ export default function Purchases() {
     () => data.reduce((sum, r) => sum + Number(r.total_amount), 0),
     [data],
   );
+  const settledCount = useMemo(() => data.filter((item) => item.is_settled).length, [data]);
+  const unsettledCount = useMemo(
+    () => data.filter((item) => !item.is_settled).length,
+    [data],
+  );
 
   const columns: ColumnsType<PurchaseOrder> = [
     {
@@ -113,10 +152,15 @@ export default function Purchases() {
     {
       title: "厂家名称",
       dataIndex: "supplier_name",
+      width: 160,
+      ellipsis: true,
+      render: (value: string) => <a onClick={() => openSupplierHistory(value)}>{value}</a>,
     },
     {
       title: "货物名称",
       dataIndex: "product_name",
+      width: 180,
+      ellipsis: true,
     },
     {
       title: "件数",
@@ -151,15 +195,25 @@ export default function Purchases() {
       render: (v: number) => `¥${Number(v).toFixed(2)}`,
     },
     {
+      title: "结清状态",
+      dataIndex: "is_settled",
+      width: 110,
+      align: "center",
+      render: (value: boolean) =>
+        value ? <Tag color="green">已结清</Tag> : <Tag color="orange">未结清</Tag>,
+    },
+    {
       title: "备注",
       dataIndex: "notes",
+      width: 220,
       ellipsis: true,
     },
     {
       title: "操作",
-      width: 140,
+      width: 180,
       render: (_, record) => (
         <Space>
+          <a onClick={() => openSupplierHistory(record.supplier_name)}>厂家历史</a>
           <a onClick={() => openEdit(record)}>编辑</a>
           <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
             <a style={{ color: "#ff4d4f" }}>删除</a>
@@ -178,11 +232,17 @@ export default function Purchases() {
       <Card
         title={`共 ${data.length} 条记录`}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新增采购
-          </Button>
+          <Space>
+            <Typography.Text type="secondary">
+              已结清 {settledCount} 条 / 未结清 {unsettledCount} 条
+            </Typography.Text>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              新增采购
+            </Button>
+          </Space>
         }
         style={{ marginTop: 16 }}
+        styles={{ header: { whiteSpace: "nowrap" } }}
       >
         <Table
           rowKey="id"
@@ -190,6 +250,7 @@ export default function Purchases() {
           dataSource={data}
           loading={loading}
           pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+          scroll={{ x: 1380 }}
           summary={() => (
             <Table.Summary fixed>
               <Table.Summary.Row>
@@ -199,7 +260,10 @@ export default function Purchases() {
                 <Table.Summary.Cell index={7} align="right">
                   <strong>¥{totalAmount.toFixed(2)}</strong>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={8} colSpan={2} />
+                <Table.Summary.Cell index={8} align="center">
+                  <strong>{settledCount} / {unsettledCount}</strong>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={9} colSpan={2} />
               </Table.Summary.Row>
             </Table.Summary>
           )}
@@ -213,7 +277,88 @@ export default function Purchases() {
         onOk={handleSubmit}
         onCancel={() => setModalOpen(false)}
       />
+
+      <SupplierHistoryModal
+        open={supplierHistoryOpen}
+        supplierName={supplierHistoryName}
+        data={supplierHistory}
+        loading={supplierHistoryLoading}
+        onClose={() => setSupplierHistoryOpen(false)}
+        onChangePage={(page, pageSize) => {
+          if (!supplierHistoryName) {
+            return;
+          }
+          fetchSupplierHistory(supplierHistoryName, page, pageSize);
+        }}
+      />
     </div>
+  );
+}
+
+function SupplierHistoryModal({
+  open,
+  supplierName,
+  data,
+  loading,
+  onClose,
+  onChangePage,
+}: {
+  open: boolean;
+  supplierName: string;
+  data: PurchaseOrderPage | null;
+  loading: boolean;
+  onClose: () => void;
+  onChangePage: (page: number, pageSize: number) => void;
+}) {
+  const columns: ColumnsType<PurchaseOrder> = [
+    { title: "时间", dataIndex: "purchase_time", width: 120 },
+    { title: "货物名称", dataIndex: "product_name", width: 180, ellipsis: true },
+    { title: "件数", dataIndex: "box_count", width: 80, align: "right" },
+    { title: "装箱数", dataIndex: "per_box_qty", width: 90, align: "right" },
+    {
+      title: "金额",
+      dataIndex: "total_amount",
+      width: 120,
+      align: "right",
+      render: (value: number) => `¥${Number(value).toFixed(2)}`,
+    },
+    {
+      title: "结清状态",
+      dataIndex: "is_settled",
+      width: 110,
+      align: "center",
+      render: (value: boolean) =>
+        value ? <Tag color="green">已结清</Tag> : <Tag color="orange">未结清</Tag>,
+    },
+    { title: "备注", dataIndex: "notes", width: 220, ellipsis: true },
+  ];
+
+  return (
+    <Modal
+      title={supplierName ? `${supplierName} 厂家历史` : "厂家历史"}
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      width={960}
+      destroyOnHidden
+    >
+      <Table
+        style={{ marginTop: 16 }}
+        rowKey="id"
+        columns={columns}
+        dataSource={data?.items ?? []}
+        loading={loading}
+        scroll={{ x: 980 }}
+        pagination={{
+          current: data?.page ?? 1,
+          pageSize: data?.page_size ?? 10,
+          total: data?.total ?? 0,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 条`,
+          onChange: onChangePage,
+        }}
+      />
+    </Modal>
   );
 }
 
@@ -293,6 +438,7 @@ function PurchaseModal({
   const unitPrice = Form.useWatch("unit_price", form) ?? 0;
   const totalQty = boxCount * perBoxQty;
   const totalAmount = unitPrice * totalQty;
+  const remainingAmount = Math.max(totalAmount - (Form.useWatch("paid_amount", form) ?? 0), 0);
 
   return (
     <Modal
@@ -354,6 +500,24 @@ function PurchaseModal({
           >
             <InputNumber min={0} step={0.01} prefix="¥" style={{ width: 150 }} />
           </Form.Item>
+
+          <Form.Item
+            label="已付款"
+            name="paid_amount"
+            rules={[
+              { required: true, message: "请输入已付款金额" },
+              {
+                validator: async (_, value) => {
+                  if (value == null || value <= totalAmount) {
+                    return;
+                  }
+                  throw new Error("已付款不能大于本单金额");
+                },
+              },
+            ]}
+          >
+            <InputNumber min={0} step={0.01} prefix="¥" style={{ width: 150 }} />
+          </Form.Item>
         </Space>
 
         <div
@@ -365,7 +529,8 @@ function PurchaseModal({
           }}
         >
           总数量：<strong>{totalQty}</strong> &nbsp;&nbsp; 金额：
-          <strong>¥{totalAmount.toFixed(2)}</strong>
+          <strong>¥{totalAmount.toFixed(2)}</strong> &nbsp;&nbsp; 未付款：
+          <strong>¥{remainingAmount.toFixed(2)}</strong>
         </div>
 
         <Form.Item label="备注" name="notes">

@@ -12,6 +12,7 @@ class PurchaseOrderBase(SQLModel):
     box_count: int
     per_box_qty: int
     unit_price: Decimal = Field(max_digits=12, decimal_places=2)
+    paid_amount: Decimal = Field(default=Decimal("0"), max_digits=12, decimal_places=2)
     notes: str = ""
 
 
@@ -31,6 +32,7 @@ class PurchaseOrderUpdate(SQLModel):
     box_count: int | None = None
     per_box_qty: int | None = None
     unit_price: Decimal | None = None
+    paid_amount: Decimal | None = None
     notes: str | None = None
 
 
@@ -47,3 +49,24 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     @property
     def total_amount(self) -> Decimal:
         return self.unit_price * self.box_count * self.per_box_qty
+
+    @computed_field
+    @property
+    def unpaid_amount(self) -> Decimal:
+        total_amount = self.total_amount
+        if self.paid_amount >= total_amount:
+            return Decimal("0")
+        return total_amount - self.paid_amount
+
+
+    @computed_field
+    @property
+    def is_settled(self) -> bool:
+        return self.unpaid_amount <= Decimal("0")
+
+
+class PurchaseOrderPage(SQLModel):
+    items: list[PurchaseOrderResponse]
+    total: int
+    page: int
+    page_size: int
