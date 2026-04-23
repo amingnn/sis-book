@@ -94,11 +94,35 @@ def _migration_4_add_purchase_paid_amount(conn) -> None:
         )
 
 
+def _migration_5_create_task_table(conn) -> None:
+    conn.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS task (
+                id INTEGER PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                category TEXT NOT NULL DEFAULT '其他',
+                priority TEXT NOT NULL DEFAULT 'medium',
+                status TEXT NOT NULL DEFAULT 'todo',
+                due_date DATE,
+                related_type TEXT NOT NULL DEFAULT '',
+                related_id INTEGER,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP
+            )
+            """
+        )
+    )
+
+
 MIGRATIONS = [
     Migration(1, "add_salesorderitem_image", _migration_1_add_salesorderitem_image),
     Migration(2, "backfill_order_level_images", _migration_2_backfill_order_level_images),
     Migration(3, "add_sales_collection_time", _migration_3_add_sales_collection_time),
     Migration(4, "add_purchase_paid_amount", _migration_4_add_purchase_paid_amount),
+    Migration(5, "create_task_table", _migration_5_create_task_table),
 ]
 
 

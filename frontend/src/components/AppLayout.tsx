@@ -6,6 +6,7 @@ import {
   AccountBookOutlined,
   ShoppingCartOutlined,
   FileTextOutlined,
+  CheckSquareOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
@@ -15,6 +16,7 @@ const menuItems = [
   { key: "/sales", icon: <AccountBookOutlined />, label: "销售记录" },
   { key: "/purchases", icon: <ShoppingCartOutlined />, label: "采购单" },
   { key: "/orders", icon: <FileTextOutlined />, label: "开单" },
+  { key: "/tasks", icon: <CheckSquareOutlined />, label: "任务待办" },
 ];
 
 export default function AppLayout() {

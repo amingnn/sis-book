@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import SalesRecords from "./pages/SalesRecords";
 import Purchases from "./pages/Purchases";
 import Orders from "./pages/Orders";
+import Tasks from "./pages/Tasks";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Route path="/sales" element={<SalesRecords />} />
           <Route path="/purchases" element={<Purchases />} />
           <Route path="/orders" element={<Orders />} />
+          <Route path="/tasks" element={<Tasks />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

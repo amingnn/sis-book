@@ -156,26 +156,33 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      {data.unsettled_count > 0 && (
-        <Alert
-          style={{ marginTop: 16, cursor: "pointer" }}
-          type="warning"
-          showIcon
-          title={`有 ${data.unsettled_count} 笔未结清订单，合计 ¥${Number(data.unsettled_amount).toFixed(2)}`}
-          description="点击查看未结清订单"
-          onClick={() => navigate("/sales?settled=unsettled")}
-        />
-      )}
-
-      {data.due_collection_count > 0 && (
-        <Alert
-          style={{ marginTop: 16, cursor: "pointer" }}
-          type="error"
-          showIcon
-          title={`有 ${data.due_collection_count} 笔到期收款记录，合计 ¥${Number(data.due_collection_amount).toFixed(2)}`}
-          description="点击查看收款时间已到的未结清记录"
-          onClick={() => navigate("/sales?due=collection")}
-        />
+      {(data.unsettled_count > 0 || data.due_collection_count > 0) && (
+        <Row gutter={16} style={{ marginTop: 16 }}>
+          {data.unsettled_count > 0 && (
+            <Col span={data.due_collection_count > 0 ? 12 : 24}>
+              <Alert
+                style={{ cursor: "pointer" }}
+                type="warning"
+                showIcon
+                title={`有 ${data.unsettled_count} 笔未结清订单，合计 ¥${Number(data.unsettled_amount).toFixed(2)}`}
+                description="点击查看未结清订单"
+                onClick={() => navigate("/sales?settled=unsettled")}
+              />
+            </Col>
+          )}
+          {data.due_collection_count > 0 && (
+            <Col span={data.unsettled_count > 0 ? 12 : 24}>
+              <Alert
+                style={{ cursor: "pointer" }}
+                type="error"
+                showIcon
+                title={`有 ${data.due_collection_count} 笔到期收款记录，合计 ¥${Number(data.due_collection_amount).toFixed(2)}`}
+                description="点击查看收款时间已到的未结清记录"
+                onClick={() => navigate("/sales?due=collection")}
+              />
+            </Col>
+          )}
+        </Row>
       )}
 
       <Row gutter={16} style={{ marginTop: 16 }}>

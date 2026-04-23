@@ -19,6 +19,7 @@ from app.purchases.router import router as purchases_router
 from app.sales import service as sales_service
 from app.sales.models import SalesRecord
 from app.sales.router import router as sales_router
+from app.tasks.router import router as tasks_router
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -75,6 +76,7 @@ app.add_middleware(
 app.include_router(sales_router)
 app.include_router(purchases_router)
 app.include_router(orders_router)
+app.include_router(tasks_router)
 
 
 @app.get("/api/dashboard")
@@ -112,7 +114,6 @@ def get_dashboard(session: Session = Depends(get_session)):
         select(PurchaseOrder).order_by(PurchaseOrder.purchase_time.desc()).limit(5)
     ).all()
     due_collection = sales_service.get_due_collection_summary(session, today)
-
     month_sales = Decimal(str(month_sales))
     month_cost = Decimal(str(month_cost))
     year_sales = Decimal(str(year_sales))
