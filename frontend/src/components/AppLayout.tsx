@@ -7,6 +7,7 @@ import {
   ShoppingCartOutlined,
   FileTextOutlined,
   CheckSquareOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
@@ -59,12 +60,24 @@ export default function AppLayout() {
           />
           {!collapsed ? <span>暮橙体育记账本</span> : null}
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-          onClick={({ key }) => navigate(key)}
-        />
+        <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px)" }}>
+          <Menu
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            items={menuItems}
+            onClick={({ key }) => navigate(key)}
+            style={{ borderInlineEnd: "none", flex: 1 }}
+          />
+          <div style={{ paddingBottom: 48 }}>
+            <Menu
+              mode="inline"
+              selectedKeys={[location.pathname]}
+              items={[{ key: "/data-management", icon: <SettingOutlined />, label: "数据管理" }]}
+              onClick={({ key }) => navigate(key)}
+              style={{ borderInlineEnd: "none", borderTop: "1px solid #f0f0f0" }}
+            />
+          </div>
+        </div>
       </Sider>
       <Content style={{ padding: 24, background: "#f5f5f5", overflow: "auto" }}>
         <Outlet />
