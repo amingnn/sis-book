@@ -17,7 +17,7 @@ def _relative_image_path(order_number: str, product_name: str, item_index: int, 
     safe_order = _safe_segment(order_number, "order")
     safe_product = _safe_segment(product_name, f"item-{item_index + 1}")
     filename = f"{safe_product}{suffix}"
-    return Path("img") / safe_order / safe_product / filename
+    return Path("img") / safe_order / filename
 
 
 def store_order_item_image(image: str, order_number: str, product_name: str, item_index: int) -> str:
