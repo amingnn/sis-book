@@ -19,6 +19,8 @@ from app.purchases.router import router as purchases_router
 from app.sales import service as sales_service
 from app.sales.models import SalesRecord
 from app.sales.router import router as sales_router
+from app.sync.router import router as sync_router
+from app.sync.service import start_scheduler, stop_scheduler
 from app.tasks.router import router as tasks_router
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -61,7 +63,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _log("lifespan: init_db start")
     init_db()
     _log("lifespan: init_db done")
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 app = FastAPI(title="暮橙体育记账本", lifespan=lifespan)
@@ -77,6 +81,7 @@ app.include_router(sales_router)
 app.include_router(purchases_router)
 app.include_router(orders_router)
 app.include_router(tasks_router)
+app.include_router(sync_router)
 
 
 @app.get("/api/dashboard")

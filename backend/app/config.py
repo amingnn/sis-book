@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+APP_NAME = "sis-book"
+
 
 def get_data_dir() -> Path:
     """获取数据存储目录，根据操作系统选择合适路径"""
@@ -11,9 +13,10 @@ def get_data_dir() -> Path:
     else:
         base = Path.home() / ".local" / "share"
 
-    data_dir = base / "sis-book"
+    data_dir = base / APP_NAME
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
 
 
-DATABASE_URL = f"sqlite:///{get_data_dir() / 'data.db'}"
+DATABASE_PATH = get_data_dir() / "data.db"
+DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
