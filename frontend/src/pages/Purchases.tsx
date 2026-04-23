@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Button,
   Card,
+  Col,
   DatePicker,
   Form,
   Input,
@@ -9,6 +10,7 @@ import {
   message,
   Modal,
   Popconfirm,
+  Row,
   Space,
   Table,
   Typography,
@@ -462,49 +464,54 @@ function PurchaseModal({
           <Input />
         </Form.Item>
 
-        <Space style={{ width: "100%" }}>
-          <Form.Item
-            label="件数"
-            name="box_count"
-            rules={[{ required: true, message: "请输入件数" }]}
-          >
-            <InputNumber min={0} style={{ width: 150 }} />
-          </Form.Item>
-
-          <Form.Item
-            label="装箱数"
-            name="per_box_qty"
-            rules={[{ required: true, message: "请输入装箱数" }]}
-          >
-            <InputNumber min={0} style={{ width: 150 }} />
-          </Form.Item>
-
-          <Form.Item
-            label="单价"
-            name="unit_price"
-            rules={[{ required: true, message: "请输入单价" }]}
-          >
-            <InputNumber min={0} step={0.01} prefix="¥" style={{ width: 150 }} />
-          </Form.Item>
-
-          <Form.Item
-            label="已付款"
-            name="paid_amount"
-            rules={[
-              { required: true, message: "请输入已付款金额" },
-              {
-                validator: async (_, value) => {
-                  if (value == null || value <= totalAmount) {
-                    return;
-                  }
-                  throw new Error("已付款不能大于本单金额");
+        <Row gutter={12}>
+          <Col span={12}>
+            <Form.Item
+              label="件数"
+              name="box_count"
+              rules={[{ required: true, message: "请输入件数" }]}
+            >
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              label="装箱数"
+              name="per_box_qty"
+              rules={[{ required: true, message: "请输入装箱数" }]}
+            >
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              label="单价"
+              name="unit_price"
+              rules={[{ required: true, message: "请输入单价" }]}
+            >
+              <InputNumber min={0} step={0.01} prefix="¥" style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              label="已付款"
+              name="paid_amount"
+              rules={[
+                { required: true, message: "请输入已付款金额" },
+                {
+                  validator: async (_, value) => {
+                    if (value == null || value <= totalAmount) {
+                      return;
+                    }
+                    throw new Error("已付款不能大于本单金额");
+                  },
                 },
-              },
-            ]}
-          >
-            <InputNumber min={0} step={0.01} prefix="¥" style={{ width: 150 }} />
-          </Form.Item>
-        </Space>
+              ]}
+            >
+              <InputNumber min={0} step={0.01} prefix="¥" style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+        </Row>
 
         <div
           style={{
