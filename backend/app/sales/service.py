@@ -132,7 +132,7 @@ def get_summary(
 def get_due_collection_summary(session: Session, due_date: date) -> dict:
     stmt = (
         select(
-            func.count(SalesRecord.id),
+            func.count(col(SalesRecord.id)),
             func.coalesce(func.sum(SalesRecord.amount), 0),
         )
         .where(col(SalesRecord.is_settled) == False)  # noqa: E712
