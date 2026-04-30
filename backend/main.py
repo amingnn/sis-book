@@ -14,6 +14,7 @@ import uvicorn
 from app.config import get_data_dir
 from app.database import get_session, init_db
 from app.customer.router import router as customer_router
+from app.import_export.router import router as import_export_router
 from app.orders.router import router as orders_router
 from app.product.router import router as product_router
 from app.purchases.models import PurchaseOrder
@@ -88,6 +89,7 @@ app.include_router(sync_router)
 app.include_router(customer_router)
 app.include_router(supplier_router)
 app.include_router(product_router)
+app.include_router(import_export_router)
 
 @app.get("/api/dashboard")
 def get_dashboard(session: Session = Depends(get_session)):
