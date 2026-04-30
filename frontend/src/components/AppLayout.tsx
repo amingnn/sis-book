@@ -8,15 +8,23 @@ import {
   FileTextOutlined,
   CheckSquareOutlined,
   SettingOutlined,
+  UserOutlined,
+  ShopOutlined,
+  AppstoreOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
 
 const menuItems = [
   { key: "/", icon: <HomeOutlined />, label: "首页" },
+  { key: "/data-overview", icon: <BarChartOutlined />, label: "数据总览" },
   { key: "/sales", icon: <AccountBookOutlined />, label: "销售记录" },
   { key: "/purchases", icon: <ShoppingCartOutlined />, label: "采购单" },
   { key: "/orders", icon: <FileTextOutlined />, label: "开单" },
+  { key: "/customers", icon: <UserOutlined />, label: "客户" },
+  { key: "/suppliers", icon: <ShopOutlined />, label: "厂家" },
+  { key: "/products", icon: <AppstoreOutlined />, label: "产品" },
   { key: "/tasks", icon: <CheckSquareOutlined />, label: "任务待办" },
 ];
 

@@ -4,7 +4,6 @@ import {
   Col,
   Card,
   Statistic,
-  Alert,
   Table,
   Tag,
   Typography,
@@ -15,6 +14,8 @@ import {
   RiseOutlined,
   CalendarOutlined,
   TrophyOutlined,
+  WarningOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import client from "../api/client";
@@ -111,9 +112,9 @@ export default function Dashboard() {
     <div>
       <Typography.Title level={4}>首页仪表盘</Typography.Title>
 
-      <Row gutter={16}>
-        <Col span={6}>
-          <Card>
+      <Row gutter={[16, 16]}>
+        <Col span={4}>
+          <Card style={{ height: "100%" }}>
             <Statistic
               title="本月销售额"
               value={data.month_sales}
@@ -122,8 +123,8 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card>
+        <Col span={4}>
+          <Card style={{ height: "100%" }}>
             <Statistic
               title="本月毛利润"
               value={data.month_profit}
@@ -133,8 +134,8 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card>
+        <Col span={4}>
+          <Card style={{ height: "100%" }}>
             <Statistic
               title="本年销售额"
               value={data.year_sales}
@@ -143,8 +144,8 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card>
+        <Col span={4}>
+          <Card style={{ height: "100%" }}>
             <Statistic
               title="本年毛利润"
               value={data.year_profit}
@@ -154,36 +155,37 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
+        <Col span={4}>
+          <Card
+            hoverable
+            style={{ height: "100%" }}
+            onClick={() => navigate("/sales?settled=unsettled")}
+          >
+            <Statistic
+              title={`未结清订单 ${data.unsettled_count} 笔`}
+              value={data.unsettled_amount}
+              precision={2}
+              prefix={<><WarningOutlined /> ¥</>}
+              styles={{ content: { color: data.unsettled_count > 0 ? "#d48806" : undefined } }}
+            />
+          </Card>
+        </Col>
+        <Col span={4}>
+          <Card
+            hoverable
+            style={{ height: "100%" }}
+            onClick={() => navigate("/sales?due=collection")}
+          >
+            <Statistic
+              title={`到期收款 ${data.due_collection_count} 笔`}
+              value={data.due_collection_amount}
+              precision={2}
+              prefix={<><ClockCircleOutlined /> ¥</>}
+              styles={{ content: { color: data.due_collection_count > 0 ? "#cf1322" : undefined } }}
+            />
+          </Card>
+        </Col>
       </Row>
-
-      {(data.unsettled_count > 0 || data.due_collection_count > 0) && (
-        <Row gutter={16} style={{ marginTop: 16 }}>
-          {data.unsettled_count > 0 && (
-            <Col span={data.due_collection_count > 0 ? 12 : 24}>
-              <Alert
-                style={{ cursor: "pointer" }}
-                type="warning"
-                showIcon
-                title={`有 ${data.unsettled_count} 笔未结清订单，合计 ¥${Number(data.unsettled_amount).toFixed(2)}`}
-                description="点击查看未结清订单"
-                onClick={() => navigate("/sales?settled=unsettled")}
-              />
-            </Col>
-          )}
-          {data.due_collection_count > 0 && (
-            <Col span={data.unsettled_count > 0 ? 12 : 24}>
-              <Alert
-                style={{ cursor: "pointer" }}
-                type="error"
-                showIcon
-                title={`有 ${data.due_collection_count} 笔到期收款记录，合计 ¥${Number(data.due_collection_amount).toFixed(2)}`}
-                description="点击查看收款时间已到的未结清记录"
-                onClick={() => navigate("/sales?due=collection")}
-              />
-            </Col>
-          )}
-        </Row>
-      )}
 
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col span={12}>

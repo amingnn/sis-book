@@ -1,0 +1,189 @@
+import { useEffect, useMemo, useState } from "react";
+import { Card, Col, Row, Spin, Statistic, Table, Tag, Typography } from "antd";
+import {
+  AppstoreOutlined,
+  DollarOutlined,
+  ShopOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
+
+import client from "../api/client";
+import { customersApi, type Customer } from "../api/customers";
+import { productsApi, type Product } from "../api/products";
+import { suppliersApi, type Supplier } from "../api/suppliers";
+import { purchasesApi, type PurchaseOrder } from "../api/purchases";
+import { salesApi, type SalesSummary } from "../api/sales";
+
+interface DashboardData {
+  month_sales: number;
+  month_profit: number;
+  year_sales: number;
+  year_profit: number;
+  unsettled_count: number;
+  unsettled_amount: number;
+  due_collection_count: number;
+  due_collection_amount: number;
+}
+
+export default function DataOverview() {
+  const [loading, setLoading] = useState(true);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [salesSummary, setSalesSummary] = useState<SalesSummary | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      client.get<DashboardData>("/dashboard"),
+      salesApi.summary(),
+      customersApi.list(),
+      suppliersApi.list(),
+      productsApi.list(),
+      purchasesApi.list(),
+    ])
+      .then(([dashboardRes, summaryRes, customerRes, supplierRes, productRes, purchaseRes]) => {
+        setDashboard(dashboardRes.data);
+        setSalesSummary(summaryRes.data);
+        setCustomers(customerRes.data);
+        setSuppliers(supplierRes.data);
+        setProducts(productRes.data);
+        setPurchases(purchaseRes.data);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const inventoryValue = useMemo(
+    () =>
+      products.reduce(
+        (sum, product) => sum + Number(product.purchase_price) * Number(product.stock_qty),
+        0,
+      ),
+    [products],
+  );
+
+  const unpaidPurchaseAmount = useMemo(
+    () => purchases.reduce((sum, item) => sum + Number(item.unpaid_amount), 0),
+    [purchases],
+  );
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: "center", padding: 80 }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <Typography.Title level={4}>数据总览</Typography.Title>
+
+      <Row gutter={[16, 16]}>
+        <Col span={6}>
+          <Card>
+            <Statistic title="客户数" value={customers.length} prefix={<UserOutlined />} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="厂家数" value={suppliers.length} prefix={<ShopOutlined />} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="产品数" value={products.length} prefix={<AppstoreOutlined />} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="库存参考金额"
+              value={inventoryValue}
+              precision={2}
+              prefix={<><DollarOutlined /> ¥</>}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="本月销售"
+              value={dashboard?.month_sales ?? 0}
+              precision={2}
+              prefix="¥"
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="本月毛利"
+              value={dashboard?.month_profit ?? 0}
+              precision={2}
+              prefix="¥"
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="未结清销售"
+              value={dashboard?.unsettled_amount ?? 0}
+              precision={2}
+              prefix="¥"
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="未付款采购" value={unpaidPurchaseAmount} precision={2} prefix="¥" />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col span={12}>
+          <Card title="库存关注">
+            <Table
+              rowKey="id"
+              size="small"
+              pagination={false}
+              dataSource={[...products].sort((a, b) => a.stock_qty - b.stock_qty).slice(0, 8)}
+              columns={[
+                { title: "产品", dataIndex: "name" },
+                { title: "厂家", dataIndex: "supplier_name" },
+                {
+                  title: "库存",
+                  dataIndex: "stock_qty",
+                  align: "right",
+                  render: (value: number) =>
+                    value <= 0 ? <Tag color="red">{value}</Tag> : value,
+                },
+              ]}
+            />
+          </Card>
+        </Col>
+        <Col span={12}>
+          <Card title="销售概况">
+            <Row gutter={[16, 16]}>
+              <Col span={12}>
+                <Statistic title="销售额" value={salesSummary?.total_amount ?? 0} precision={2} prefix="¥" />
+              </Col>
+              <Col span={12}>
+                <Statistic title="销售成本" value={salesSummary?.total_cost ?? 0} precision={2} prefix="¥" />
+              </Col>
+              <Col span={12}>
+                <Statistic title="毛利润" value={salesSummary?.total_profit ?? 0} precision={2} prefix="¥" />
+              </Col>
+              <Col span={12}>
+                <Statistic title="利润率" value={salesSummary?.avg_margin ?? 0} precision={2} suffix="%" />
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  );
+}
