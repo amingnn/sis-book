@@ -12,8 +12,6 @@ import {
 import {
   DollarOutlined,
   RiseOutlined,
-  CalendarOutlined,
-  TrophyOutlined,
   WarningOutlined,
   ClockCircleOutlined,
 } from "@ant-design/icons";
@@ -113,7 +111,7 @@ export default function Dashboard() {
       <Typography.Title level={4}>首页仪表盘</Typography.Title>
 
       <Row gutter={[16, 16]}>
-        <Col span={4}>
+        <Col span={6}>
           <Card style={{ height: "100%" }}>
             <Statistic
               title="本月销售额"
@@ -123,7 +121,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={6}>
           <Card style={{ height: "100%" }}>
             <Statistic
               title="本月毛利润"
@@ -134,28 +132,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={4}>
-          <Card style={{ height: "100%" }}>
-            <Statistic
-              title="本年销售额"
-              value={data.year_sales}
-              precision={2}
-              prefix={<><CalendarOutlined /> ¥</>}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card style={{ height: "100%" }}>
-            <Statistic
-              title="本年毛利润"
-              value={data.year_profit}
-              precision={2}
-              prefix={<><TrophyOutlined /> ¥</>}
-              styles={{ content: { color: data.year_profit >= 0 ? "#3f8600" : "#cf1322" } }}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
+        <Col span={6}>
           <Card
             hoverable
             style={{ height: "100%" }}
@@ -170,7 +147,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={6}>
           <Card
             hoverable
             style={{ height: "100%" }}
