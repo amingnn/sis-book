@@ -81,7 +81,34 @@ def test_run_migrations_adds_missing_columns_backfills_data_and_records_versions
         )
         conn.execute(
             text(
-                "INSERT INTO salesorderitem(id, sales_order_id, product_name) VALUES (10, 1, '羽毛球')"
+                """
+                INSERT INTO salesorderitem(
+                    id,
+                    sales_order_id,
+                    product_name,
+                    total_boxes,
+                    per_box_qty,
+                    unit_price,
+                    box_size
+                )
+                VALUES (10, 1, '羽毛球', 2, 12, 3.5, '60*40*30')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO purchaseorder(
+                    id,
+                    purchase_time,
+                    supplier_name,
+                    product_name,
+                    box_count,
+                    per_box_qty,
+                    unit_price
+                )
+                VALUES (20, '2026-04-20', '胜利厂家', '羽毛球', 5, 12, 2.5)
+                """
             )
         )
 
@@ -92,8 +119,21 @@ def test_run_migrations_adds_missing_columns_backfills_data_and_records_versions
         assert "collection_time" in _column_names(conn, "salesrecord")
         assert "paid_amount" in _column_names(conn, "purchaseorder")
         assert inspect(conn).has_table("task")
+        assert inspect(conn).has_table("supplier")
+        assert inspect(conn).has_table("product")
         assert conn.execute(text("SELECT image FROM salesorderitem WHERE id = 10")).scalar_one() == "img/migrated.png"
-        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 5
+        assert conn.execute(text("SELECT name FROM supplier")).scalar_one() == "胜利厂家"
+        product = conn.execute(
+            text(
+                """
+                SELECT image, supplier_name, per_box_qty, box_spec, purchase_price, stock_qty
+                FROM product
+                WHERE name = '羽毛球'
+                """
+            )
+        ).one()
+        assert product == ("img/migrated.png", "胜利厂家", 12, "60*40*30", 2.5, 36)
+        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 6
 
 
 def test_run_migrations_is_idempotent(monkeypatch, tmp_path):
@@ -158,4 +198,4 @@ def test_run_migrations_is_idempotent(monkeypatch, tmp_path):
     migrations.run_migrations(engine)
 
     with engine.begin() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 5
+        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 6

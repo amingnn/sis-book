@@ -117,12 +117,157 @@ def _migration_5_create_task_table(conn) -> None:
     )
 
 
+def _migration_6_create_supplier_product_tables(conn) -> None:
+    conn.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS supplier (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                phone TEXT NOT NULL DEFAULT '',
+                address TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS product (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                image TEXT NOT NULL DEFAULT '',
+                supplier_name TEXT NOT NULL DEFAULT '',
+                per_box_qty INTEGER NOT NULL DEFAULT 0,
+                box_spec TEXT NOT NULL DEFAULT '',
+                volume NUMERIC NOT NULL DEFAULT 0,
+                purchase_price NUMERIC NOT NULL DEFAULT 0,
+                stock_qty INTEGER NOT NULL DEFAULT 0,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    )
+
+    inspector = inspect(conn)
+    tables = set(inspector.get_table_names())
+    if "purchaseorder" in tables:
+        conn.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO supplier (name)
+                SELECT DISTINCT TRIM(supplier_name)
+                FROM purchaseorder
+                WHERE COALESCE(TRIM(supplier_name), '') != ''
+                """
+            )
+        )
+
+    if "salesorderitem" in tables:
+        conn.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO product (
+                    name,
+                    image,
+                    per_box_qty,
+                    box_spec,
+                    stock_qty
+                )
+                SELECT
+                    TRIM(product_name),
+                    COALESCE(MAX(NULLIF(image, '')), ''),
+                    COALESCE(MAX(per_box_qty), 0),
+                    COALESCE(MAX(NULLIF(box_size, '')), ''),
+                    0 - COALESCE(SUM(total_boxes * per_box_qty), 0)
+                FROM salesorderitem
+                WHERE COALESCE(TRIM(product_name), '') != ''
+                GROUP BY TRIM(product_name)
+                """
+            )
+        )
+
+    if "purchaseorder" in tables:
+        conn.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO product (
+                    name,
+                    supplier_name,
+                    per_box_qty,
+                    purchase_price,
+                    stock_qty
+                )
+                SELECT
+                    TRIM(product_name),
+                    COALESCE(MAX(NULLIF(TRIM(supplier_name), '')), ''),
+                    COALESCE(MAX(per_box_qty), 0),
+                    COALESCE(MAX(unit_price), 0),
+                    0
+                FROM purchaseorder
+                WHERE COALESCE(TRIM(product_name), '') != ''
+                GROUP BY TRIM(product_name)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE product
+                SET
+                    supplier_name = COALESCE(
+                        NULLIF(supplier_name, ''),
+                        (
+                            SELECT po.supplier_name
+                            FROM purchaseorder AS po
+                            WHERE TRIM(po.product_name) = product.name
+                              AND COALESCE(TRIM(po.supplier_name), '') != ''
+                            ORDER BY po.purchase_time DESC, po.id DESC
+                            LIMIT 1
+                        ),
+                        ''
+                    ),
+                    purchase_price = COALESCE(
+                        NULLIF(purchase_price, 0),
+                        (
+                            SELECT po.unit_price
+                            FROM purchaseorder AS po
+                            WHERE TRIM(po.product_name) = product.name
+                            ORDER BY po.purchase_time DESC, po.id DESC
+                            LIMIT 1
+                        ),
+                        0
+                    ),
+                    stock_qty = stock_qty + COALESCE(
+                        (
+                            SELECT SUM(po.box_count * po.per_box_qty)
+                            FROM purchaseorder AS po
+                            WHERE TRIM(po.product_name) = product.name
+                        ),
+                        0
+                    )
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM purchaseorder AS po
+                    WHERE TRIM(po.product_name) = product.name
+                )
+                """
+            )
+        )
+
+
 MIGRATIONS = [
     Migration(1, "add_salesorderitem_image", _migration_1_add_salesorderitem_image),
     Migration(2, "backfill_order_level_images", _migration_2_backfill_order_level_images),
     Migration(3, "add_sales_collection_time", _migration_3_add_sales_collection_time),
     Migration(4, "add_purchase_paid_amount", _migration_4_add_purchase_paid_amount),
     Migration(5, "create_task_table", _migration_5_create_task_table),
+    Migration(6, "create_supplier_product_tables", _migration_6_create_supplier_product_tables),
 ]
 
 

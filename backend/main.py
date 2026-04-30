@@ -15,11 +15,13 @@ from app.config import get_data_dir
 from app.database import get_session, init_db
 from app.customer.router import router as customer_router
 from app.orders.router import router as orders_router
+from app.product.router import router as product_router
 from app.purchases.models import PurchaseOrder
 from app.purchases.router import router as purchases_router
 from app.sales import service as sales_service
 from app.sales.models import SalesRecord
 from app.sales.router import router as sales_router
+from app.supplier.router import router as supplier_router
 from app.sync.router import router as sync_router
 from app.sync.service import start_scheduler, stop_scheduler
 from app.tasks.router import router as tasks_router
@@ -84,6 +86,8 @@ app.include_router(orders_router)
 app.include_router(tasks_router)
 app.include_router(sync_router)
 app.include_router(customer_router)
+app.include_router(supplier_router)
+app.include_router(product_router)
 
 @app.get("/api/dashboard")
 def get_dashboard(session: Session = Depends(get_session)):
