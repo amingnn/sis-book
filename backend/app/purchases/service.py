@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, col, func, or_, select
 
 from .models import (
     PurchaseOrder,
@@ -33,12 +33,21 @@ def _clamp_paid_amount(data: PurchaseOrderCreate | PurchaseOrderUpdate) -> dict:
 def list_purchases(
     session: Session,
     *,
+    q: str | None = None,
     supplier_name: str | None = None,
     product_name: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> list[PurchaseOrder]:
     stmt = select(PurchaseOrder)
+    if q:
+        stmt = stmt.where(
+            or_(
+                col(PurchaseOrder.supplier_name).contains(q),
+                col(PurchaseOrder.product_name).contains(q),
+                col(PurchaseOrder.notes).contains(q),
+            )
+        )
     if supplier_name:
         stmt = stmt.where(PurchaseOrder.supplier_name.contains(supplier_name))
     if product_name:

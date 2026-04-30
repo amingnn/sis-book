@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api/sales", tags=["销售记录"])
 
 @router.get("/summary")
 def read_summary(
+    q: str | None = Query(None),
     customer_name: str | None = Query(None),
     is_settled: bool | None = Query(None),
     start_date: date | None = Query(None),
@@ -21,6 +22,7 @@ def read_summary(
 ):
     return service.get_summary(
         session,
+        q,
         customer_name,
         is_settled,
         start_date,
@@ -31,6 +33,7 @@ def read_summary(
 
 @router.get("", response_model=list[SalesRecordResponse])
 def read_records(
+    q: str | None = Query(None),
     customer_name: str | None = Query(None),
     is_settled: bool | None = Query(None),
     start_date: date | None = Query(None),
@@ -40,6 +43,7 @@ def read_records(
 ):
     return service.list_records(
         session,
+        q,
         customer_name,
         is_settled,
         start_date,

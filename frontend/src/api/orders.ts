@@ -1,6 +1,7 @@
 import client from "./client";
 
 export interface SalesOrderListParams {
+  q?: string;
   order_number?: string;
   customer_name?: string;
   start_date?: string;

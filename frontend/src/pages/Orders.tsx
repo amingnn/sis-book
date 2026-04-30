@@ -32,6 +32,8 @@ import {
   type SalesOrderItem,
   type SalesOrderListParams,
 } from "../api/orders";
+import { customersApi, type Customer } from "../api/customers";
+import { productsApi, type Product } from "../api/products";
 
 type View = "list" | "create" | "detail";
 
@@ -89,6 +91,8 @@ export default function Orders() {
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<SalesOrderListParams>({});
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemRow[]>([newItemRow()]);
@@ -106,6 +110,13 @@ export default function Orders() {
   useEffect(() => {
     if (view === "list") fetchOrders();
   }, [view, filters]);
+
+  useEffect(() => {
+    Promise.all([customersApi.list(), productsApi.list()]).then(([customerRes, productRes]) => {
+      setCustomers(customerRes.data);
+      setProducts(productRes.data);
+    });
+  }, []);
 
   const totalAmount = items.reduce((sum, r) => sum + calcSubtotal(r), 0);
   const totalBoxes = items.reduce((sum, r) => sum + r.total_boxes, 0);
@@ -286,7 +297,24 @@ export default function Orders() {
         <Card>
           <Form form={form} layout="inline" style={{ flexWrap: "wrap", gap: "8px 0" }}>
             <Form.Item label="客户名称" name="customer_name" rules={[{ required: true, message: "请输入客户名称" }]}>
-              <Input style={{ width: 180 }} />
+              <Select
+                showSearch
+                optionFilterProp="label"
+                style={{ width: 180 }}
+                options={customers.map((customer) => ({
+                  label: customer.name,
+                  value: customer.name,
+                }))}
+                onChange={(value) => {
+                  const customer = customers.find((item) => item.name === value);
+                  if (customer) {
+                    form.setFieldsValue({
+                      customer_phone: customer.phone,
+                      delivery_address: customer.address,
+                    });
+                  }
+                }}
+              />
             </Form.Item>
             <Form.Item label="电话" name="customer_phone">
               <Input style={{ width: 140 }} />
@@ -329,7 +357,27 @@ export default function Orders() {
               {
                 title: "产品名称", dataIndex: "product_name", width: 150,
                 render: (_, record) => (
-                  <Input value={record.product_name} onChange={(e) => updateItem(record.key, "product_name", e.target.value)} placeholder="产品名称" />
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    value={record.product_name || undefined}
+                    onChange={(value) => {
+                      const product = products.find((item) => item.name === value);
+                      updateItem(record.key, "product_name", value);
+                      if (product) {
+                        updateItem(record.key, "per_box_qty", product.per_box_qty || record.per_box_qty);
+                        updateItem(record.key, "box_size", product.box_spec || record.box_size);
+                        updateItem(record.key, "unit_price", product.purchase_price || record.unit_price);
+                        updateItem(record.key, "image", product.image || record.image);
+                      }
+                    }}
+                    placeholder="产品名称"
+                    style={{ width: "100%" }}
+                    options={products.map((product) => ({
+                      label: product.name,
+                      value: product.name,
+                    }))}
+                  />
                 ),
               },
               {
@@ -706,10 +754,12 @@ function OrderFilters({
 }) {
   const [orderNumber, setOrderNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [query, setQuery] = useState("");
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
 
   const handleSearch = () => {
     const nextFilters: SalesOrderListParams = {};
+    if (query.trim()) nextFilters.q = query.trim();
     if (orderNumber.trim()) nextFilters.order_number = orderNumber.trim();
     if (customerName.trim()) nextFilters.customer_name = customerName.trim();
     if (dateRange?.[0]) nextFilters.start_date = dateRange[0].format("YYYY-MM-DD");
@@ -720,12 +770,21 @@ function OrderFilters({
   const handleReset = () => {
     setOrderNumber("");
     setCustomerName("");
+    setQuery("");
     setDateRange(null);
     onReset();
   };
 
   return (
     <Space wrap>
+      <Input
+        placeholder="可模糊搜索"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onPressEnter={handleSearch}
+        allowClear
+        style={{ width: 180 }}
+      />
       <Input
         placeholder="单号"
         value={orderNumber}

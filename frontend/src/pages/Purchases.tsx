@@ -11,6 +11,7 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Select,
   Space,
   Table,
   Typography,
@@ -30,6 +31,8 @@ import {
   type PurchaseOrderForm,
   type PurchaseOrderPage,
 } from "../api/purchases";
+import { productsApi, type Product } from "../api/products";
+import { suppliersApi, type Supplier } from "../api/suppliers";
 
 const { RangePicker } = DatePicker;
 
@@ -44,6 +47,8 @@ export default function Purchases() {
   const [supplierHistoryLoading, setSupplierHistoryLoading] = useState(false);
   const [form] = Form.useForm<PurchaseOrderForm>();
   const [filters, setFilters] = useState<Record<string, unknown>>({});
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   const fetchData = async (params?: Record<string, unknown>) => {
     setLoading(true);
@@ -58,6 +63,13 @@ export default function Purchases() {
   useEffect(() => {
     fetchData(filters);
   }, [filters]);
+
+  useEffect(() => {
+    Promise.all([suppliersApi.list(), productsApi.list()]).then(([supplierRes, productRes]) => {
+      setSuppliers(supplierRes.data);
+      setProducts(productRes.data);
+    });
+  }, []);
 
   const fetchSupplierHistory = async (
     supplierName: string,
@@ -84,11 +96,13 @@ export default function Purchases() {
   };
 
   const handleSearch = (
+    query: string,
     supplierName: string,
     productName: string,
     dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null,
   ) => {
     const params: Record<string, unknown> = {};
+    if (query) params.q = query;
     if (supplierName) params.supplier_name = supplierName;
     if (productName) params.product_name = productName;
     if (dates?.[0]) params.start_date = dates[0].format("YYYY-MM-DD");
@@ -259,6 +273,8 @@ export default function Purchases() {
         open={modalOpen}
         editingId={editingId}
         form={form}
+        suppliers={suppliers}
+        products={products}
         onOk={handleSubmit}
         onCancel={() => setModalOpen(false)}
       />
@@ -350,6 +366,7 @@ function FilterBar({
   onSearch,
 }: {
   onSearch: (
+    query: string,
     supplier: string,
     product: string,
     dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null,
@@ -357,22 +374,33 @@ function FilterBar({
 }) {
   const [supplier, setSupplier] = useState("");
   const [product, setProduct] = useState("");
+  const [query, setQuery] = useState("");
   const [dates, setDates] = useState<
     [dayjs.Dayjs | null, dayjs.Dayjs | null] | null
   >(null);
 
-  const handleSearch = () => onSearch(supplier, product, dates);
+  const handleSearch = () => onSearch(query, supplier, product, dates);
 
   const handleReset = () => {
+    setQuery("");
     setSupplier("");
     setProduct("");
     setDates(null);
-    onSearch("", "", null);
+    onSearch("", "", "", null);
   };
 
   return (
     <Card>
       <Space wrap>
+        <Input
+          placeholder="可模糊搜索"
+          prefix={<SearchOutlined />}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onPressEnter={handleSearch}
+          allowClear
+          style={{ width: 180 }}
+        />
         <Input
           placeholder="厂家名称"
           prefix={<SearchOutlined />}
@@ -412,12 +440,16 @@ function PurchaseModal({
   open,
   editingId,
   form,
+  suppliers,
+  products,
   onOk,
   onCancel,
 }: {
   open: boolean;
   editingId: number | null;
   form: ReturnType<typeof Form.useForm<PurchaseOrderForm>>[0];
+  suppliers: Supplier[];
+  products: Product[];
   onOk: () => void;
   onCancel: () => void;
 }) {
@@ -453,7 +485,14 @@ function PurchaseModal({
           name="supplier_name"
           rules={[{ required: true, message: "请输入厂家名称" }]}
         >
-          <Input />
+          <Select
+            showSearch
+            optionFilterProp="label"
+            options={suppliers.map((supplier) => ({
+              label: supplier.name,
+              value: supplier.name,
+            }))}
+          />
         </Form.Item>
 
         <Form.Item
@@ -461,7 +500,24 @@ function PurchaseModal({
           name="product_name"
           rules={[{ required: true, message: "请输入货物名称" }]}
         >
-          <Input />
+          <Select
+            showSearch
+            optionFilterProp="label"
+            options={products.map((product) => ({
+              label: product.name,
+              value: product.name,
+            }))}
+            onChange={(value) => {
+              const product = products.find((item) => item.name === value);
+              if (product) {
+                form.setFieldsValue({
+                  supplier_name: product.supplier_name || form.getFieldValue("supplier_name"),
+                  per_box_qty: product.per_box_qty,
+                  unit_price: product.purchase_price,
+                });
+              }
+            }}
+          />
         </Form.Item>
 
         <Row gutter={12}>

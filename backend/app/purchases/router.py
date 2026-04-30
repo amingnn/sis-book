@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/purchases", tags=["采购单"])
 
 @router.get("", response_model=list[PurchaseOrderResponse])
 def list_purchases(
+    q: str | None = Query(None),
     supplier_name: str | None = Query(None),
     product_name: str | None = Query(None),
     start_date: date | None = Query(None),
@@ -26,6 +27,7 @@ def list_purchases(
 ):
     return service.list_purchases(
         session,
+        q=q,
         supplier_name=supplier_name,
         product_name=product_name,
         start_date=start_date,

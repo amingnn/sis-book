@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/orders", tags=["开单"])
 
 @router.get("", response_model=list[SalesOrderResponse])
 def api_list_orders(
+    q: str | None = Query(None),
     order_number: str | None = Query(None),
     customer_name: str | None = Query(None),
     start_date: date | None = Query(None),
@@ -26,6 +27,7 @@ def api_list_orders(
 ):
     return list_orders(
         session,
+        q=q,
         order_number=order_number,
         customer_name=customer_name,
         start_date=start_date,

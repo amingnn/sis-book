@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, col, func, or_, select
 
 from app.orders.models import (
     SalesOrder,
@@ -26,12 +26,26 @@ def _generate_order_number(session: Session, sales_date: date) -> str:
 
 def list_orders(
     session: Session,
+    q: str | None = None,
     order_number: str | None = None,
     customer_name: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> list[SalesOrder]:
     stmt = select(SalesOrder)
+    if q:
+        stmt = stmt.join(SalesOrderItem, isouter=True).where(
+            or_(
+                col(SalesOrder.order_number).contains(q),
+                col(SalesOrder.customer_name).contains(q),
+                col(SalesOrder.customer_phone).contains(q),
+                col(SalesOrder.delivery_address).contains(q),
+                col(SalesOrder.notes).contains(q),
+                col(SalesOrderItem.product_name).contains(q),
+                col(SalesOrderItem.color_spec).contains(q),
+                col(SalesOrderItem.notes).contains(q),
+            )
+        ).distinct()
     if order_number:
         stmt = stmt.where(col(SalesOrder.order_number).contains(order_number))
     if customer_name:

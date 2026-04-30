@@ -30,6 +30,8 @@ import {
   type SalesRecord,
   type SalesRecordForm,
 } from "../api/sales";
+import { customersApi, type Customer } from "../api/customers";
+import { productsApi, type Product } from "../api/products";
 
 const { RangePicker } = DatePicker;
 
@@ -41,7 +43,10 @@ export default function SalesRecords() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
+  const [query, setQuery] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isSettled, setIsSettled] = useState<boolean | undefined>();
   const [isDueCollection, setIsDueCollection] = useState<boolean | undefined>();
   const [dateRange, setDateRange] = useState<
@@ -61,6 +66,7 @@ export default function SalesRecords() {
 
   const buildParams = useCallback(() => {
     const params: Record<string, unknown> = {};
+    if (query) params.q = query;
     if (customerName) params.customer_name = customerName;
     if (isSettled !== undefined) params.is_settled = isSettled;
     if (isDueCollection) params.due_collection = true;
@@ -69,7 +75,7 @@ export default function SalesRecords() {
       params.end_date = dateRange[1].format("YYYY-MM-DD");
     }
     return params;
-  }, [customerName, isSettled, isDueCollection, dateRange]);
+  }, [query, customerName, isSettled, isDueCollection, dateRange]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -86,6 +92,7 @@ export default function SalesRecords() {
 
   const handleResetFilters = () => {
     const dueParam = searchParams.get("due");
+    setQuery("");
     setCustomerName("");
     setDateRange(null);
     setIsSettled(dueParam === "collection" ? false : undefined);
@@ -95,6 +102,13 @@ export default function SalesRecords() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    Promise.all([customersApi.list(), productsApi.list()]).then(([customerRes, productRes]) => {
+      setCustomers(customerRes.data);
+      setProducts(productRes.data);
+    });
+  }, []);
 
   const handleAdd = () => {
     setEditingId(null);
@@ -244,13 +258,26 @@ export default function SalesRecords() {
       <Card style={{ marginBottom: 16 }}>
         <Space wrap>
           <Input
-            placeholder="客户名称"
+            placeholder="可模糊搜索"
             prefix={<SearchOutlined />}
             allowClear
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             onPressEnter={() => fetchData()}
             style={{ width: 180 }}
+          />
+          <Select
+            showSearch
+            allowClear
+            placeholder="客户名称"
+            value={customerName}
+            onChange={(value) => setCustomerName(value ?? "")}
+            optionFilterProp="label"
+            style={{ width: 180 }}
+            options={customers.map((customer) => ({
+              label: customer.name,
+              value: customer.name,
+            }))}
           />
           <Select
             placeholder="是否结清"
@@ -325,7 +352,14 @@ export default function SalesRecords() {
               label="客户名称"
               rules={[{ required: true, message: "请输入客户名称" }]}
             >
-              <Input />
+              <Select
+                showSearch
+                optionFilterProp="label"
+                options={customers.map((customer) => ({
+                  label: customer.name,
+                  value: customer.name,
+                }))}
+              />
             </Form.Item>
           </Space>
           <Form.Item
@@ -333,7 +367,20 @@ export default function SalesRecords() {
             label="产品"
             rules={[{ required: true, message: "请输入产品" }]}
           >
-            <Input />
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={products.map((product) => ({
+                label: product.name,
+                value: product.name,
+              }))}
+              onChange={(value) => {
+                const product = products.find((item) => item.name === value);
+                if (product) {
+                  form.setFieldsValue({ cost: product.purchase_price });
+                }
+              }}
+            />
           </Form.Item>
           <Space style={{ display: "flex", gap: 16 }}>
             <Form.Item
