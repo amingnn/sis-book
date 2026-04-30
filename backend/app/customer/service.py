@@ -49,7 +49,7 @@ def update_customer(session: Session, customer_id: int, data: CustomerUpdate) ->
     if not customer:
         return None
     
-    customer.sqlmodel_update(data.model_dump(exclude_unset=True))
+    customer.sqlmodel_update(data.model_dump(exclude_unset=True, exclude_none=True))
     customer.updated_at = datetime.now()
     session.add(customer)
     session.commit()
@@ -65,5 +65,4 @@ def delete_customer(session: Session, customer_id: int) -> bool:
     session.delete(customer)
     session.commit()
     return True
-
 
