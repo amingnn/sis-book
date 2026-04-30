@@ -15,4 +15,5 @@ dependencies = [
 dev = [
     "pillow>=12.2.0",
     "pytest>=9.0.3",
+    "rich>=15.0.0",
 ]
