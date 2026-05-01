@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Button,
   Card,
+  Col,
   Collapse,
   Descriptions,
   Form,
@@ -9,6 +10,7 @@ import {
   InputNumber,
   List,
   Modal,
+  Row,
   Space,
   Switch,
   Tag,
@@ -116,6 +118,30 @@ export default function DataManagement() {
     await runSync();
   };
 
+  const handleToggleSync = async (enabled: boolean) => {
+    if (!status) return;
+    const syncBaseDir = status.sync_root || status.sync_base_dir;
+    if (enabled && !syncBaseDir) {
+      message.warning("请先设置同步路径");
+      setSettingsOpen(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      await syncApi.saveSettings({
+        sync_base_dir: syncBaseDir,
+        enabled,
+        interval_minutes: status.interval_minutes || 30,
+      });
+      message.success(enabled ? "定时同步已开启" : "定时同步已关闭");
+      await fetchStatus();
+    } catch {
+      message.error(enabled ? "开启同步失败" : "关闭同步失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const runImportExportPlaceholder = async (
     action: () => Promise<unknown>,
     successText: string,
@@ -126,57 +152,111 @@ export default function DataManagement() {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          数据管理
-        </Typography.Title>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => void fetchStatus()} loading={loading}>
-            刷新
-          </Button>
-          <Button
-            type="primary"
-            icon={<ThunderboltOutlined />}
-            onClick={handleRunNow}
-            loading={syncing}
-            disabled={!status?.configured}
-          >
-            立即检查并同步
-          </Button>
-        </Space>
-      </div>
+      <Typography.Title level={4}>数据管理</Typography.Title>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Descriptions bordered size="small" column={1}>
-          <Descriptions.Item label="同步目录">
-            {status?.sync_root || "-"}
-          </Descriptions.Item>
-          <Descriptions.Item label="检测到的 OneDrive 目录">
-            {status?.detected_dirs?.length
-              ? status.detected_dirs.map((item) => item.path).join(" ; ")
-              : "未检测到"}
-          </Descriptions.Item>
-          <Descriptions.Item label="定时同步">
-            {status?.enabled ? <Tag color="success">已开启</Tag> : <Tag>未开启</Tag>}
-          </Descriptions.Item>
-          <Descriptions.Item label="同步间隔">
-            {status?.interval_minutes ? `${status.interval_minutes} 分钟` : "-"}
-          </Descriptions.Item>
-          <Descriptions.Item label="上次同步时间">
-            {status?.last_sync_at || "-"}
-          </Descriptions.Item>
-          <Descriptions.Item label="上次同步动作">
-            {status?.last_sync_direction
-              ? directionLabelMap[status.last_sync_direction] ?? status.last_sync_direction
-              : "立即检查并同步时，会自动判断是推送本机最新数据还是拉取同步目录中的最新数据"}
-          </Descriptions.Item>
-          <Descriptions.Item label="最近错误">
-            {status?.last_error ? <Typography.Text type="danger">{status.last_error}</Typography.Text> : "-"}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={15}>
+          <Card title="同步状态">
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="同步目录">
+                {status?.sync_root || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="检测到的 OneDrive 目录">
+                {status?.detected_dirs?.length
+                  ? status.detected_dirs.map((item) => item.path).join(" ; ")
+                  : "未检测到"}
+              </Descriptions.Item>
+              <Descriptions.Item label="定时同步">
+                {status?.enabled ? <Tag color="success">已开启</Tag> : <Tag>未开启</Tag>}
+              </Descriptions.Item>
+              <Descriptions.Item label="同步间隔">
+                {status?.interval_minutes ? `${status.interval_minutes} 分钟` : "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="上次同步时间">
+                {status?.last_sync_at || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="上次同步动作">
+                {status?.last_sync_direction
+                  ? directionLabelMap[status.last_sync_direction] ?? status.last_sync_direction
+                  : "立即检查并同步时，会自动判断是推送本机最新数据还是拉取同步目录中的最新数据"}
+              </Descriptions.Item>
+              <Descriptions.Item label="最近错误">
+                {status?.last_error ? <Typography.Text type="danger">{status.last_error}</Typography.Text> : "-"}
+              </Descriptions.Item>
+            </Descriptions>
+            <Space wrap style={{ marginTop: 16 }}>
+              <Button icon={<ReloadOutlined />} onClick={() => void fetchStatus()} loading={loading}>
+                刷新状态
+              </Button>
+              <Button
+                type="primary"
+                icon={<ThunderboltOutlined />}
+                onClick={handleRunNow}
+                loading={syncing}
+                disabled={!status?.configured}
+              >
+                立即检查并同步
+              </Button>
+              <Button
+                danger={status?.enabled}
+                onClick={() => void handleToggleSync(!status?.enabled)}
+                loading={saving}
+                disabled={!status || (!status.enabled && !status.configured)}
+              >
+                {status?.enabled ? "关闭定时同步" : "开启定时同步"}
+              </Button>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} xl={9}>
+          <Card title="导入导出">
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Button
+                block
+                type="primary"
+                icon={<DownloadOutlined />}
+                onClick={() =>
+                  runImportExportPlaceholder(importExportApi.exportCsv, "CSV 导出接口已预留")
+                }
+              >
+                导出 CSV
+              </Button>
+              <Button
+                block
+                icon={<FilePdfOutlined />}
+                onClick={() =>
+                  runImportExportPlaceholder(importExportApi.exportPdf, "PDF 导出接口已预留")
+                }
+              >
+                导出 PDF
+              </Button>
+              <Upload
+                accept=".csv"
+                showUploadList={false}
+                beforeUpload={() => {
+                  void runImportExportPlaceholder(importExportApi.importCsv, "CSV 导入接口已预留");
+                  return false;
+                }}
+              >
+                <Button block icon={<ImportOutlined />}>导入 CSV</Button>
+              </Upload>
+              <Upload
+                accept=".xlsx,.xls"
+                showUploadList={false}
+                beforeUpload={() => {
+                  void runImportExportPlaceholder(importExportApi.importExcel, "Excel 导入接口已预留");
+                  return false;
+                }}
+              >
+                <Button block icon={<FileExcelOutlined />}>导入 Excel</Button>
+              </Upload>
+            </Space>
+          </Card>
+        </Col>
+      </Row>
 
       <Collapse
+        style={{ marginTop: 16 }}
         activeKey={settingsOpen ? ["settings"] : []}
         onChange={(keys) => setSettingsOpen(keys.length > 0)}
         items={[
@@ -249,48 +329,6 @@ export default function DataManagement() {
           },
         ]}
       />
-
-      <Card title="导入导出" style={{ marginTop: 16 }}>
-        <Space wrap>
-          <Button
-            type="primary"
-            icon={<DownloadOutlined />}
-            onClick={() =>
-              runImportExportPlaceholder(importExportApi.exportCsv, "CSV 导出接口已预留")
-            }
-          >
-            导出 CSV
-          </Button>
-          <Button
-            icon={<FilePdfOutlined />}
-            onClick={() =>
-              runImportExportPlaceholder(importExportApi.exportPdf, "PDF 导出接口已预留")
-            }
-          >
-            导出 PDF
-          </Button>
-          <Upload
-            accept=".csv"
-            showUploadList={false}
-            beforeUpload={() => {
-              void runImportExportPlaceholder(importExportApi.importCsv, "CSV 导入接口已预留");
-              return false;
-            }}
-          >
-            <Button icon={<ImportOutlined />}>导入 CSV</Button>
-          </Upload>
-          <Upload
-            accept=".xlsx,.xls"
-            showUploadList={false}
-            beforeUpload={() => {
-              void runImportExportPlaceholder(importExportApi.importExcel, "Excel 导入接口已预留");
-              return false;
-            }}
-          >
-            <Button icon={<FileExcelOutlined />}>导入 Excel</Button>
-          </Upload>
-        </Space>
-      </Card>
 
       <Modal
         title="检测到同步冲突"
