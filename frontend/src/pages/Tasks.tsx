@@ -28,7 +28,7 @@ import { purchasesApi, type PurchaseOrder } from "../api/purchases";
 import { salesApi, type SalesRecord } from "../api/sales";
 import { tasksApi, type Task, type TaskForm, type TaskPriority, type TaskStatus } from "../api/tasks";
 import PageToolbar from "../components/PageToolbar";
-import { renderTableActions } from "../components/TableActions";
+import { createActionColumn } from "../components/TableActions";
 
 const statusOptions: Array<{ label: string; value: TaskStatus }> = [
   { label: "待处理", value: "todo" },
@@ -319,26 +319,27 @@ export default function Tasks() {
       width: 180,
       ellipsis: true,
     },
-    {
-      title: "操作",
-      width: 220,
-      render: (_, record) => (
-        renderTableActions(record, [
-          record.status !== "done"
-            ? { key: "done", label: "完成", icon: <CheckCircleOutlined />, onClick: () => handleQuickStatus(record, "done") }
-            : { key: "reopen", label: "重开", onClick: () => handleQuickStatus(record, "todo") },
-          { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: handleEdit },
-          {
-            key: "delete",
-            label: "删除",
-            icon: <DeleteOutlined />,
-            danger: true,
-            confirmTitle: "确认删除这个任务？",
-            onClick: () => handleDelete(record.id),
-          },
-        ])
-      ),
-    },
+    createActionColumn<Task>(
+      [
+        {
+          key: "status",
+          label: (record) => (record.status !== "done" ? "完成" : "重开"),
+          icon: <CheckCircleOutlined />,
+          onClick: (record) =>
+            handleQuickStatus(record, record.status !== "done" ? "done" : "todo"),
+        },
+        { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: handleEdit },
+        {
+          key: "delete",
+          label: "删除",
+          icon: <DeleteOutlined />,
+          danger: true,
+          confirmTitle: "确认删除这个任务？",
+          onClick: (record) => handleDelete(record.id),
+        },
+      ],
+      220,
+    ),
   ];
 
   if (view === "form") {

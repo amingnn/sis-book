@@ -261,28 +261,52 @@ export default function Orders() {
             rowKey="id"
             loading={loading}
             pagination={{ pageSize: 15 }}
+            scroll={{ x: 1150 }}
             columns={[
               {
                 title: "单号",
                 dataIndex: "order_number",
                 width: 180,
-                render: (value: string) => <Button type="link" onClick={() => setFilters((prev) => ({ ...prev, order_number: value }))}>{value}</Button>,
               },
               {
                 title: "客户",
                 dataIndex: "customer_name",
                 width: 150,
-                render: (value: string) => <Button type="link" onClick={() => setFilters((prev) => ({ ...prev, customer_name: value }))}>{value}</Button>,
+                render: (value: string) => (
+                  <Button type="link" onClick={() => setFilters((prev) => ({ ...prev, customer_name: value }))}>
+                    {value}
+                  </Button>
+                ),
               },
               {
                 title: "销售日期",
                 dataIndex: "sales_date",
                 width: 120,
-                render: (value: string) => (
-                  <Button type="link" onClick={() => setFilters((prev) => ({ ...prev, start_date: value, end_date: value }))}>
-                    {value}
-                  </Button>
-                ),
+              },
+              {
+                title: "产品",
+                key: "products",
+                width: 180,
+                render: (_, record) => {
+                  const names = Array.from(
+                    new Set(record.items.map((item) => item.product_name).filter(Boolean)),
+                  );
+                  if (!names.length) return "-";
+                  return (
+                    <Space size={[4, 0]} wrap>
+                      {names.map((name) => (
+                        <Button
+                          key={name}
+                          type="link"
+                          size="small"
+                          onClick={() => setFilters((prev) => ({ ...prev, q: name }))}
+                        >
+                          {name}
+                        </Button>
+                      ))}
+                    </Space>
+                  );
+                },
               },
               {
                 title: "合计金额", key: "total", width: 120,

@@ -31,11 +31,6 @@ export default function Customers() {
     fetchData("");
   }, []);
 
-  const fillFilter = (value: string) => {
-    setQuery(value);
-    fetchData(value);
-  };
-
   const openCreate = () => {
     setEditingId(null);
     form.resetFields();
@@ -73,21 +68,20 @@ export default function Customers() {
       dataIndex: "name",
       width: 180,
       ellipsis: true,
-      render: (value: string) => <Button type="link" onClick={() => fillFilter(value)}>{value}</Button>,
     },
     {
       title: "电话",
       dataIndex: "phone",
       width: 150,
       ellipsis: true,
-      render: (value: string) => value ? <Button type="link" onClick={() => fillFilter(value)}>{value}</Button> : "-",
+      render: (value: string) => value || "-",
     },
     {
       title: "地址",
       dataIndex: "address",
       width: 260,
       ellipsis: true,
-      render: (value: string) => value ? <Button type="link" onClick={() => fillFilter(value)}>{value}</Button> : "-",
+      render: (value: string) => value || "-",
     },
     { title: "备注", dataIndex: "notes", ellipsis: true },
     createActionColumn<Customer>(

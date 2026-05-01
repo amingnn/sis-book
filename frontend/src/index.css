@@ -7,3 +7,10 @@ body {
 .ant-table-cell .ant-space {
   flex-wrap: nowrap;
 }
+
+.ant-table-cell-fix-right.table-action-column,
+.ant-table-cell-fix-right-first.table-action-column,
+.ant-table-cell-fix-right-last.table-action-column {
+  background: #fff;
+  z-index: 5;
+}

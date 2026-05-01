@@ -142,12 +142,22 @@ export default function Purchases() {
       dataIndex: "supplier_name",
       width: 160,
       ellipsis: true,
+      render: (value: string) => (
+        <Button type="link" onClick={() => setSupplierName(value)}>
+          {value}
+        </Button>
+      ),
     },
     {
       title: "货物",
       dataIndex: "product_name",
       width: 180,
       ellipsis: true,
+      render: (value: string) => (
+        <Button type="link" onClick={() => setProductName(value)}>
+          {value}
+        </Button>
+      ),
     },
     { title: "件数", dataIndex: "box_count", width: 80, align: "right" },
     { title: "装箱数", dataIndex: "per_box_qty", width: 90, align: "right" },

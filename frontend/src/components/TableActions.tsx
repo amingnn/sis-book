@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 export interface TableAction<T> {
   key: string;
-  label: string;
+  label: ReactNode | ((record: T) => ReactNode);
   icon?: ReactNode;
   danger?: boolean;
   disabled?: boolean;
@@ -16,6 +16,8 @@ export function renderTableActions<T>(record: T, actions: TableAction<T>[]) {
   return (
     <Space size="small" wrap={false}>
       {actions.map((action) => {
+        const label =
+          typeof action.label === "function" ? action.label(record) : action.label;
         const button = (
           <Button
             size="small"
@@ -24,7 +26,7 @@ export function renderTableActions<T>(record: T, actions: TableAction<T>[]) {
             disabled={action.disabled}
             onClick={() => action.onClick(record)}
           >
-            {action.label}
+            {label}
           </Button>
         );
 
@@ -44,7 +46,7 @@ export function renderTableActions<T>(record: T, actions: TableAction<T>[]) {
               icon={action.icon}
               disabled={action.disabled}
             >
-              {action.label}
+              {label}
             </Button>
           </Popconfirm>
         );
@@ -61,6 +63,8 @@ export function createActionColumn<T>(
     title: "操作",
     key: "actions",
     width,
+    fixed: "right",
+    className: "table-action-column",
     render: (_, record) => renderTableActions(record, actions),
   };
 }

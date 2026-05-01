@@ -176,19 +176,26 @@ export default function SalesRecords() {
       title: "销售时间",
       dataIndex: "sale_time",
       width: 120,
-      render: (value: string) => <Button type="link" onClick={() => setDateRange([dayjs(value), dayjs(value)])}>{value}</Button>,
     },
     {
       title: "客户",
       dataIndex: "customer_name",
       width: 120,
-      render: (value: string) => <Button type="link" onClick={() => setCustomerName(value)}>{value}</Button>,
+      render: (value: string) => (
+        <Button type="link" onClick={() => setCustomerName(value)}>
+          {value}
+        </Button>
+      ),
     },
     {
       title: "产品",
       dataIndex: "product",
       width: 120,
-      render: (value: string) => <Button type="link" onClick={() => setProductName(value)}>{value}</Button>,
+      render: (value: string) => (
+        <Button type="link" onClick={() => setProductName(value)}>
+          {value}
+        </Button>
+      ),
     },
     {
       title: "金额",
