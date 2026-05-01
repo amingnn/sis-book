@@ -12,22 +12,21 @@ import {
   ShopOutlined,
   AppstoreOutlined,
   BarChartOutlined,
-  ImportOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Content } = Layout;
 
 const menuItems = [
   { key: "/", icon: <HomeOutlined />, label: "首页" },
-  { key: "/sales", icon: <AccountBookOutlined />, label: "销售记录" },
-  { key: "/purchases", icon: <ShoppingCartOutlined />, label: "采购单" },
+  { key: "/sales", icon: <AccountBookOutlined />, label: "销售" },
+  { key: "/purchases", icon: <ShoppingCartOutlined />, label: "采购" },
+  { key: "/tasks", icon: <CheckSquareOutlined />, label: "任务" },
   { key: "/orders", icon: <FileTextOutlined />, label: "开单" },
   { key: "/customers", icon: <UserOutlined />, label: "客户" },
   { key: "/suppliers", icon: <ShopOutlined />, label: "厂家" },
   { key: "/products", icon: <AppstoreOutlined />, label: "产品" },
   { key: "/data-overview", icon: <BarChartOutlined />, label: "数据总览" },
-  { key: "/import-export", icon: <ImportOutlined />, label: "导入导出" },
-  { key: "/tasks", icon: <CheckSquareOutlined />, label: "任务待办" },
+  { key: "/data-management", icon: <SettingOutlined />, label: "数据管理" },
 ];
 
 export default function AppLayout() {
@@ -78,15 +77,6 @@ export default function AppLayout() {
             onClick={({ key }) => navigate(key)}
             style={{ borderInlineEnd: "none", flex: 1 }}
           />
-          <div style={{ paddingBottom: 48 }}>
-            <Menu
-              mode="inline"
-              selectedKeys={[location.pathname]}
-              items={[{ key: "/data-management", icon: <SettingOutlined />, label: "数据管理" }]}
-              onClick={({ key }) => navigate(key)}
-              style={{ borderInlineEnd: "none", borderTop: "1px solid #f0f0f0" }}
-            />
-          </div>
         </div>
       </Sider>
       <Content style={{ padding: 24, background: "#f5f5f5", overflow: "auto" }}>

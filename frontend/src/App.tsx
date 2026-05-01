@@ -8,7 +8,6 @@ import Orders from "./pages/Orders";
 import Customers from "./pages/Customers";
 import Suppliers from "./pages/Suppliers";
 import Products from "./pages/Products";
-import ImportExport from "./pages/ImportExport";
 import Tasks from "./pages/Tasks";
 import DataManagement from "./pages/DataManagement";
 
@@ -26,7 +25,6 @@ function App() {
           <Route path="/suppliers" element={<Suppliers />} />
           <Route path="/products" element={<Products />} />
           <Route path="/tasks" element={<Tasks />} />
-          <Route path="/import-export" element={<ImportExport />} />
           <Route path="/data-management" element={<DataManagement />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

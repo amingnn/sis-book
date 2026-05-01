@@ -13,14 +13,20 @@ import {
   Switch,
   Tag,
   Typography,
+  Upload,
   message,
 } from "antd";
 import {
   CloudSyncOutlined,
+  DownloadOutlined,
+  FileExcelOutlined,
+  FilePdfOutlined,
+  ImportOutlined,
   ReloadOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
 import { syncApi, type SyncStatus } from "../api/sync";
+import { importExportApi } from "../api/importExport";
 
 const directionLabelMap: Record<string, string> = {
   push: "已推送本机最新数据",
@@ -108,6 +114,14 @@ export default function DataManagement() {
 
   const handleRunNow = async () => {
     await runSync();
+  };
+
+  const runImportExportPlaceholder = async (
+    action: () => Promise<unknown>,
+    successText: string,
+  ) => {
+    await action();
+    message.info(successText);
   };
 
   return (
@@ -235,6 +249,48 @@ export default function DataManagement() {
           },
         ]}
       />
+
+      <Card title="导入导出" style={{ marginTop: 16 }}>
+        <Space wrap>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            onClick={() =>
+              runImportExportPlaceholder(importExportApi.exportCsv, "CSV 导出接口已预留")
+            }
+          >
+            导出 CSV
+          </Button>
+          <Button
+            icon={<FilePdfOutlined />}
+            onClick={() =>
+              runImportExportPlaceholder(importExportApi.exportPdf, "PDF 导出接口已预留")
+            }
+          >
+            导出 PDF
+          </Button>
+          <Upload
+            accept=".csv"
+            showUploadList={false}
+            beforeUpload={() => {
+              void runImportExportPlaceholder(importExportApi.importCsv, "CSV 导入接口已预留");
+              return false;
+            }}
+          >
+            <Button icon={<ImportOutlined />}>导入 CSV</Button>
+          </Upload>
+          <Upload
+            accept=".xlsx,.xls"
+            showUploadList={false}
+            beforeUpload={() => {
+              void runImportExportPlaceholder(importExportApi.importExcel, "Excel 导入接口已预留");
+              return false;
+            }}
+          >
+            <Button icon={<FileExcelOutlined />}>导入 Excel</Button>
+          </Upload>
+        </Space>
+      </Card>
 
       <Modal
         title="检测到同步冲突"
