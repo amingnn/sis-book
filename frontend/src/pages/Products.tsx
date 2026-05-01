@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Form, Image, Input, InputNumber, message, Space, Table } from "antd";
-import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, Card, Form, Image, Input, InputNumber, message, Space, Table, Upload } from "antd";
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
 import PageToolbar from "../components/PageToolbar";
@@ -143,17 +143,38 @@ export default function Products() {
             <Form.Item name="name" label="产品名称" rules={[{ required: true, message: "请输入产品名称" }]}>
               <Input />
             </Form.Item>
-            <Form.Item name="image" label="图片">
-              <Input placeholder="图片地址、/img 路径或 data URL" />
+            <Form.Item label="图片">
+              <Space direction="vertical" size={12}>
+                <Upload
+                  accept="image/*"
+                  showUploadList={false}
+                  beforeUpload={(file) => {
+                    const reader = new FileReader();
+                    reader.onload = () => form.setFieldValue("image", String(reader.result || ""));
+                    reader.readAsDataURL(file);
+                    return false;
+                  }}
+                >
+                  <Button type="primary" icon={<UploadOutlined />}>上传图片</Button>
+                </Upload>
+                <Form.Item name="image" noStyle>
+                  <Input placeholder="可选：粘贴图片地址、/img 路径或 data URL" style={{ width: 420, maxWidth: "100%" }} />
+                </Form.Item>
+              </Space>
             </Form.Item>
             {image ? (
-              <Image
-                src={resolveImageSrc(image)}
-                alt="产品预览"
-                width={80}
-                height={80}
-                style={{ objectFit: "contain", marginBottom: 16 }}
-              />
+              <Space align="start" style={{ marginBottom: 16 }}>
+                <Image
+                  src={resolveImageSrc(image)}
+                  alt="产品预览"
+                  width={96}
+                  height={96}
+                  style={{ objectFit: "contain" }}
+                />
+                <Button danger onClick={() => form.setFieldValue("image", "")}>
+                  移除图片
+                </Button>
+              </Space>
             ) : null}
             <Space style={{ display: "flex", gap: 12 }} wrap>
               <Form.Item name="per_box_qty" label="装箱数">
