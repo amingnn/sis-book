@@ -8,9 +8,24 @@ on:
   push:
     tags:
       - "v*"
-  pull_request: # 🌟 增加 PR 触发
     branches:
       - main
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - "build/**"
+      - "cliff.toml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - "build/**"
+      - "cliff.toml"
+
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -122,11 +137,26 @@ jobs:
           name: macos-dmg
           path: dist/mucheng-book-macOS.dmg
 
+  
   release:  
     if: startsWith(github.ref, 'refs/tags/') # 🌟 只有是 Tag 触发时才执行
     needs: [build-windows-installer, build-macos]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+        with: 
+          fetch-depth: 0  # 确保获取完整的 Git 历史以生成 Release Notes
+      
+      - name: 生成 changelog
+        uses: orhun/git-cliff-action@v4
+        id: cliff
+        with:
+          config: cliff.toml
+          args: -vv --latest --strip header
+        env:
+          OUTPUT: changes.md
+          GITHUB_REPO: ${{ github.repository }}
+
       - name: 下载包产物
         uses: actions/download-artifact@v7
         with:
@@ -139,7 +169,7 @@ jobs:
       - name: 发布 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: changes.md
           files: |
             dist/*.exe
             dist/*-macOS.dmg
