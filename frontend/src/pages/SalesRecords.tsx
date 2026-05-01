@@ -404,7 +404,7 @@ export default function SalesRecords() {
             showSearch
             allowClear
             placeholder="客户"
-            value={customerName}
+            value={customerName || undefined}
             onChange={(value) => setCustomerName(value ?? "")}
             optionFilterProp="label"
             style={{ width: 180 }}
