@@ -7,7 +7,6 @@ import {
   Input,
   InputNumber,
   message,
-  Popconfirm,
   Select,
   Space,
   Table,
@@ -34,6 +33,8 @@ import {
 } from "../api/orders";
 import { customersApi, type Customer } from "../api/customers";
 import { productsApi, type Product } from "../api/products";
+import PageToolbar from "../components/PageToolbar";
+import { createActionColumn } from "../components/TableActions";
 
 type View = "list" | "create" | "detail";
 
@@ -228,18 +229,29 @@ export default function Orders() {
   };
 
   const handlePrint = () => window.print();
+  const updateFilters = (nextFilters: SalesOrderListParams) => {
+    setFilters(nextFilters);
+  };
 
   // ========== 列表视图 ==========
   if (view === "list") {
     return (
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-          <Typography.Title level={4} style={{ margin: 0 }}>销售单管理</Typography.Title>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建销售单</Button>
-        </div>
+        <PageToolbar
+          title="开单"
+          searchValue={filters.q ?? ""}
+          searchPlaceholder="单号/客户/产品/时间"
+          onSearchChange={(value) => setFilters((prev) => ({ ...prev, q: value || undefined }))}
+          onSearch={() => fetchOrders()}
+          primaryText="新建销售单"
+          primaryIcon={<PlusOutlined />}
+          onPrimaryClick={handleCreate}
+        />
         <Card style={{ marginBottom: 16 }}>
           <OrderFilters
-            onSearch={(nextFilters) => setFilters(nextFilters)}
+            filters={filters}
+            customers={customers}
+            onSearch={updateFilters}
             onReset={() => setFilters({})}
           />
         </Card>
@@ -250,9 +262,28 @@ export default function Orders() {
             loading={loading}
             pagination={{ pageSize: 15 }}
             columns={[
-              { title: "单号", dataIndex: "order_number", width: 180 },
-              { title: "客户名称", dataIndex: "customer_name", width: 150 },
-              { title: "销售日期", dataIndex: "sales_date", width: 120 },
+              {
+                title: "单号",
+                dataIndex: "order_number",
+                width: 180,
+                render: (value: string) => <Button type="link" onClick={() => setFilters((prev) => ({ ...prev, order_number: value }))}>{value}</Button>,
+              },
+              {
+                title: "客户",
+                dataIndex: "customer_name",
+                width: 150,
+                render: (value: string) => <Button type="link" onClick={() => setFilters((prev) => ({ ...prev, customer_name: value }))}>{value}</Button>,
+              },
+              {
+                title: "销售日期",
+                dataIndex: "sales_date",
+                width: 120,
+                render: (value: string) => (
+                  <Button type="link" onClick={() => setFilters((prev) => ({ ...prev, start_date: value, end_date: value }))}>
+                    {value}
+                  </Button>
+                ),
+              },
               {
                 title: "合计金额", key: "total", width: 120,
                 render: (_, record) => {
@@ -263,20 +294,32 @@ export default function Orders() {
                   return `¥${total.toFixed(2)}`;
                 },
               },
-              { title: "付款方式", dataIndex: "payment_terms", width: 120 },
               {
-                title: "操作", key: "actions", width: 200,
-                render: (_, record) => (
-                  <Space>
-                    <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record.id)}>查看</Button>
-                    <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record.id)}>编辑</Button>
-                    <Button size="small" icon={<PrinterOutlined />} onClick={async () => { await handleView(record.id); }}>打印</Button>
-                    <Popconfirm title="确定删除此销售单？" onConfirm={() => handleDelete(record.id)}>
-                      <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
-                    </Popconfirm>
-                  </Space>
-                ),
+                title: "付款方式",
+                dataIndex: "payment_terms",
+                width: 120,
+                render: (value: string) => value ? (
+                  <Button type="link" onClick={() => setFilters((prev) => ({ ...prev, payment_terms: value }))}>
+                    {value}
+                  </Button>
+                ) : "-",
               },
+              createActionColumn<SalesOrder>(
+                [
+                  { key: "view", label: "查看", icon: <EyeOutlined />, onClick: (record) => handleView(record.id) },
+                  { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: (record) => handleEdit(record.id) },
+                  { key: "print", label: "打印", icon: <PrinterOutlined />, onClick: (record) => { void handleView(record.id); } },
+                  {
+                    key: "delete",
+                    label: "删除",
+                    icon: <DeleteOutlined />,
+                    danger: true,
+                    confirmTitle: "确定删除此销售单？",
+                    onClick: (record) => handleDelete(record.id),
+                  },
+                ],
+                260,
+              ),
             ]}
           />
         </Card>
@@ -746,66 +789,71 @@ export default function Orders() {
 }
 
 function OrderFilters({
+  filters,
+  customers,
   onSearch,
   onReset,
 }: {
+  filters: SalesOrderListParams;
+  customers: Customer[];
   onSearch: (filters: SalesOrderListParams) => void;
   onReset: () => void;
 }) {
-  const [orderNumber, setOrderNumber] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [query, setQuery] = useState("");
-  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+  const dateRange: [Dayjs | null, Dayjs | null] | null =
+    filters.start_date || filters.end_date
+      ? [
+          filters.start_date ? dayjs(filters.start_date) : null,
+          filters.end_date ? dayjs(filters.end_date) : null,
+        ]
+      : null;
 
   const handleSearch = () => {
-    const nextFilters: SalesOrderListParams = {};
-    if (query.trim()) nextFilters.q = query.trim();
-    if (orderNumber.trim()) nextFilters.order_number = orderNumber.trim();
-    if (customerName.trim()) nextFilters.customer_name = customerName.trim();
-    if (dateRange?.[0]) nextFilters.start_date = dateRange[0].format("YYYY-MM-DD");
-    if (dateRange?.[1]) nextFilters.end_date = dateRange[1].format("YYYY-MM-DD");
-    onSearch(nextFilters);
+    onSearch(filters);
   };
 
   const handleReset = () => {
-    setOrderNumber("");
-    setCustomerName("");
-    setQuery("");
-    setDateRange(null);
     onReset();
   };
 
   return (
     <Space wrap>
       <Input
-        placeholder="可模糊搜索"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onPressEnter={handleSearch}
-        allowClear
-        style={{ width: 180 }}
-      />
-      <Input
         placeholder="单号"
-        value={orderNumber}
-        onChange={(e) => setOrderNumber(e.target.value)}
+        value={filters.order_number ?? ""}
+        onChange={(e) => onSearch({ ...filters, order_number: e.target.value || undefined })}
         onPressEnter={handleSearch}
         allowClear
         style={{ width: 180 }}
       />
-      <Input
-        placeholder="客户名称"
-        value={customerName}
-        onChange={(e) => setCustomerName(e.target.value)}
-        onPressEnter={handleSearch}
+      <Select
+        showSearch
         allowClear
+        placeholder="客户"
+        value={filters.customer_name}
+        onChange={(value) => onSearch({ ...filters, customer_name: value })}
+        optionFilterProp="label"
         style={{ width: 180 }}
+        options={customers.map((customer) => ({ label: customer.name, value: customer.name }))}
+      />
+      <Select
+        allowClear
+        placeholder="付款方式"
+        value={filters.payment_terms}
+        onChange={(value) => onSearch({ ...filters, payment_terms: value })}
+        style={{ width: 180 }}
+        options={PAYMENT_OPTIONS}
       />
       <DatePicker.RangePicker
         value={dateRange}
-        onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
+        onChange={(dates) =>
+          onSearch({
+            ...filters,
+            start_date: dates?.[0] ? dates[0].format("YYYY-MM-DD") : undefined,
+            end_date: dates?.[1] ? dates[1].format("YYYY-MM-DD") : undefined,
+          })
+        }
       />
-      <Button type="primary" onClick={handleSearch}>查询</Button>
+      <Button type="primary" onClick={handleSearch}>筛选</Button>
       <Button onClick={handleReset}>重置</Button>
     </Space>
   );

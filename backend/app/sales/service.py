@@ -11,10 +11,12 @@ def _apply_filters(
     statement,
     *,
     q: str | None = None,
-    customer_name: str | None,
-    is_settled: bool | None,
-    start_date: date | None,
-    end_date: date | None,
+    customer_name: str | None = None,
+    product: str | None = None,
+    is_settled: bool | None = None,
+    payment_method: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     due_collection: bool = False,
     due_date: date | None = None,
 ):
@@ -29,6 +31,10 @@ def _apply_filters(
         )
     if customer_name:
         statement = statement.where(col(SalesRecord.customer_name).contains(customer_name))
+    if product:
+        statement = statement.where(col(SalesRecord.product).contains(product))
+    if payment_method:
+        statement = statement.where(col(SalesRecord.payment_method).contains(payment_method))
     if is_settled is not None:
         statement = statement.where(col(SalesRecord.is_settled) == is_settled)
     if start_date:
@@ -46,7 +52,9 @@ def list_records(
     session: Session,
     q: str | None = None,
     customer_name: str | None = None,
+    product: str | None = None,
     is_settled: bool | None = None,
+    payment_method: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
     due_collection: bool = False,
@@ -56,7 +64,9 @@ def list_records(
         stmt,
         q=q,
         customer_name=customer_name,
+        product=product,
         is_settled=is_settled,
+        payment_method=payment_method,
         start_date=start_date,
         end_date=end_date,
         due_collection=due_collection,
@@ -100,7 +110,9 @@ def get_summary(
     session: Session,
     q: str | None = None,
     customer_name: str | None = None,
+    product: str | None = None,
     is_settled: bool | None = None,
+    payment_method: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
     due_collection: bool = False,
@@ -113,7 +125,9 @@ def get_summary(
         stmt,
         q=q,
         customer_name=customer_name,
+        product=product,
         is_settled=is_settled,
+        payment_method=payment_method,
         start_date=start_date,
         end_date=end_date,
         due_collection=due_collection,
@@ -129,7 +143,9 @@ def get_summary(
         unsettled_stmt,
         q=q,
         customer_name=customer_name,
+        product=product,
         is_settled=None,
+        payment_method=payment_method,
         start_date=start_date,
         end_date=end_date,
         due_collection=due_collection,

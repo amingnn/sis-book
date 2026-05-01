@@ -6,8 +6,6 @@ import {
   DatePicker,
   Form,
   Input,
-  Modal,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -17,11 +15,11 @@ import {
   message,
 } from "antd";
 import {
+  ArrowLeftOutlined,
   CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
-  SearchOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -29,6 +27,8 @@ import { ordersApi, type SalesOrder } from "../api/orders";
 import { purchasesApi, type PurchaseOrder } from "../api/purchases";
 import { salesApi, type SalesRecord } from "../api/sales";
 import { tasksApi, type Task, type TaskForm, type TaskPriority, type TaskStatus } from "../api/tasks";
+import PageToolbar from "../components/PageToolbar";
+import { renderTableActions } from "../components/TableActions";
 
 const statusOptions: Array<{ label: string; value: TaskStatus }> = [
   { label: "待处理", value: "todo" },
@@ -77,6 +77,7 @@ interface RelatedOption {
   label: string;
   value: number;
 }
+type View = "list" | "form";
 
 const relatedTypeLabelMap: Record<string, string> = {
   sales: "销售记录",
@@ -85,9 +86,9 @@ const relatedTypeLabelMap: Record<string, string> = {
 };
 
 export default function Tasks() {
+  const [view, setView] = useState<View>("list");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [keyword, setKeyword] = useState("");
   const [status, setStatus] = useState<TaskStatus | undefined>();
@@ -134,7 +135,7 @@ export default function Tasks() {
       priority: "medium",
       status: "todo",
     });
-    setModalOpen(true);
+    setView("form");
   };
 
   const handleEdit = (task: Task) => {
@@ -154,7 +155,7 @@ export default function Tasks() {
       ...task,
       due_date: task.due_date ? dayjs(task.due_date) : null,
     });
-    setModalOpen(true);
+    setView("form");
   };
 
   const handleDelete = async (id: number) => {
@@ -191,7 +192,7 @@ export default function Tasks() {
         await tasksApi.create(payload);
         message.success("任务已创建");
       }
-      setModalOpen(false);
+      setView("list");
       fetchData();
     } catch {
       /* form validation or API error */
@@ -321,57 +322,119 @@ export default function Tasks() {
     {
       title: "操作",
       width: 220,
-      fixed: "right",
       render: (_, record) => (
-        <Space size="small" wrap>
-          {record.status !== "done" ? (
-            <Button
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleQuickStatus(record, "done")}
-            >
-              完成
-            </Button>
-          ) : (
-            <Button size="small" onClick={() => handleQuickStatus(record, "todo")}>
-              重开
-            </Button>
-          )}
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm title="确认删除这个任务？" onConfirm={() => handleDelete(record.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
+        renderTableActions(record, [
+          record.status !== "done"
+            ? { key: "done", label: "完成", icon: <CheckCircleOutlined />, onClick: () => handleQuickStatus(record, "done") }
+            : { key: "reopen", label: "重开", onClick: () => handleQuickStatus(record, "todo") },
+          { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: handleEdit },
+          {
+            key: "delete",
+            label: "删除",
+            icon: <DeleteOutlined />,
+            danger: true,
+            confirmTitle: "确认删除这个任务？",
+            onClick: () => handleDelete(record.id),
+          },
+        ])
       ),
     },
   ];
 
+  if (view === "form") {
+    return (
+      <div>
+        <PageToolbar
+          title={editingId ? "编辑任务" : "新增任务"}
+          leading={<Button icon={<ArrowLeftOutlined />} onClick={() => setView("list")}>返回</Button>}
+        />
+        <Card>
+          <Form form={form} layout="vertical" style={{ maxWidth: 900 }}>
+            <Form.Item name="title" label="任务标题" rules={[{ required: true, message: "请输入任务标题" }]}>
+              <Input placeholder="例如：跟进未结清订单" />
+            </Form.Item>
+            <Form.Item name="description" label="任务说明">
+              <Input.TextArea rows={3} placeholder="补充任务背景或执行要求" />
+            </Form.Item>
+            <Row gutter={12}>
+              <Col span={8}>
+                <Form.Item name="category" label="分类" initialValue="其他">
+                  <Input placeholder="例如：催款、采购、发货" />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item name="priority" label="优先级" initialValue="medium">
+                  <Select options={priorityOptions} />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item name="status" label="状态" initialValue="todo">
+                  <Select options={statusOptions} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={12}>
+              <Col span={8}>
+                <Form.Item name="due_date" label="截止日期">
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item name="related_type" label="关联类型" initialValue="">
+                  <Select
+                    options={relatedTypeOptions}
+                    onChange={(value) => {
+                      setRelatedType(value);
+                      setRelatedOptions([]);
+                      form.setFieldValue("related_id", undefined);
+                      if (value) {
+                        searchRelatedOptions(value, "");
+                      }
+                    }}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item name="related_id" label="关联记录">
+                  <Select
+                    showSearch
+                    allowClear
+                    filterOption={false}
+                    disabled={!relatedType}
+                    placeholder={relatedType ? "输入关键词搜索并选择" : "请先选择关联类型"}
+                    options={relatedOptions}
+                    loading={relatedSearching}
+                    onSearch={(value) => searchRelatedOptions(relatedType, value)}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item name="notes" label="备注">
+              <Input.TextArea rows={2} placeholder="执行备注、风险点、补充信息" />
+            </Form.Item>
+            <Button type="primary" onClick={handleSubmit}>
+              {editingId ? "保存修改" : "保存"}
+            </Button>
+          </Form>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          任务待办
-        </Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增任务
-        </Button>
-      </div>
-
+      <PageToolbar
+        title="任务"
+        searchValue={keyword}
+        searchPlaceholder="任务/分类/时间"
+        onSearchChange={setKeyword}
+        onSearch={() => fetchData()}
+        primaryText="新增任务"
+        primaryIcon={<PlusOutlined />}
+        onPrimaryClick={handleAdd}
+      />
       <Card style={{ marginBottom: 16 }}>
         <Space wrap>
-          <Input
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            onPressEnter={() => fetchData()}
-            placeholder="搜索任务标题或描述"
-            prefix={<SearchOutlined />}
-            allowClear
-            style={{ width: 220 }}
-          />
           <Select
             placeholder="状态"
             allowClear
@@ -397,7 +460,7 @@ export default function Tasks() {
             style={{ width: 140 }}
           />
           <Button type="primary" onClick={() => fetchData()}>
-            查询
+            筛选
           </Button>
           <Button onClick={handleReset}>重置</Button>
         </Space>
@@ -413,79 +476,6 @@ export default function Tasks() {
           pagination={{ pageSize: 10, showSizeChanger: false }}
         />
       </Card>
-
-      <Modal
-        title={editingId ? "编辑任务" : "新增任务"}
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        onOk={handleSubmit}
-        destroyOnHidden
-      >
-        <Form form={form} layout="vertical">
-          <Form.Item name="title" label="任务标题" rules={[{ required: true, message: "请输入任务标题" }]}>
-            <Input placeholder="例如：跟进未结清订单" />
-          </Form.Item>
-          <Form.Item name="description" label="任务说明">
-            <Input.TextArea rows={3} placeholder="补充任务背景或执行要求" />
-          </Form.Item>
-          <Row gutter={12}>
-            <Col span={8}>
-              <Form.Item name="category" label="分类" initialValue="其他">
-                <Input placeholder="例如：催款、采购、发货" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="priority" label="优先级" initialValue="medium">
-                <Select options={priorityOptions} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="status" label="状态" initialValue="todo">
-                <Select options={statusOptions} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={12}>
-            <Col span={8}>
-              <Form.Item name="due_date" label="截止日期">
-                <DatePicker style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="related_type" label="关联类型" initialValue="">
-                <Select
-                  options={relatedTypeOptions}
-                  onChange={(value) => {
-                    setRelatedType(value);
-                    setRelatedOptions([]);
-                    form.setFieldValue("related_id", undefined);
-                    if (value) {
-                      searchRelatedOptions(value, "");
-                    }
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="related_id" label="关联记录">
-                <Select
-                  showSearch
-                  allowClear
-                  filterOption={false}
-                  disabled={!relatedType}
-                  placeholder={relatedType ? "输入关键词搜索并选择" : "请先选择关联类型"}
-                  options={relatedOptions}
-                  loading={relatedSearching}
-                  onSearch={(value) => searchRelatedOptions(relatedType, value)}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="notes" label="备注">
-            <Input.TextArea rows={2} placeholder="执行备注、风险点、补充信息" />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 }

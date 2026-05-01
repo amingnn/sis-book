@@ -21,6 +21,7 @@ def api_list_orders(
     q: str | None = Query(None),
     order_number: str | None = Query(None),
     customer_name: str | None = Query(None),
+    payment_terms: str | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
     session: Session = Depends(get_session),
@@ -30,6 +31,7 @@ def api_list_orders(
         q=q,
         order_number=order_number,
         customer_name=customer_name,
+        payment_terms=payment_terms,
         start_date=start_date,
         end_date=end_date,
     )

@@ -29,6 +29,7 @@ def list_orders(
     q: str | None = None,
     order_number: str | None = None,
     customer_name: str | None = None,
+    payment_terms: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> list[SalesOrder]:
@@ -50,6 +51,8 @@ def list_orders(
         stmt = stmt.where(col(SalesOrder.order_number).contains(order_number))
     if customer_name:
         stmt = stmt.where(col(SalesOrder.customer_name).contains(customer_name))
+    if payment_terms:
+        stmt = stmt.where(col(SalesOrder.payment_terms).contains(payment_terms))
     if start_date:
         stmt = stmt.where(col(SalesOrder.sales_date) >= start_date)
     if end_date:

@@ -4,6 +4,7 @@ export interface SalesOrderListParams {
   q?: string;
   order_number?: string;
   customer_name?: string;
+  payment_terms?: string;
   start_date?: string;
   end_date?: string;
 }

@@ -6,21 +6,18 @@ import {
   Form,
   Input,
   InputNumber,
-  Modal,
-  Popconfirm,
   Select,
   Space,
   Switch,
   Table,
   Tag,
-  Typography,
   message,
 } from "antd";
 import {
+  ArrowLeftOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
-  SearchOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -32,23 +29,28 @@ import {
 } from "../api/sales";
 import { customersApi, type Customer } from "../api/customers";
 import { productsApi, type Product } from "../api/products";
+import PageToolbar from "../components/PageToolbar";
+import { createActionColumn } from "../components/TableActions";
 
 const { RangePicker } = DatePicker;
+type View = "list" | "form";
+type SettlementFilter = "due" | "unsettled" | "settled" | undefined;
 
 export default function SalesRecords() {
   const [searchParams] = useSearchParams();
+  const [view, setView] = useState<View>("list");
   const [records, setRecords] = useState<SalesRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
   const [query, setQuery] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [productName, setProductName] = useState("");
+  const [settlementFilter, setSettlementFilter] = useState<SettlementFilter>();
+  const [paymentMethod, setPaymentMethod] = useState("");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [isSettled, setIsSettled] = useState<boolean | undefined>();
-  const [isDueCollection, setIsDueCollection] = useState<boolean | undefined>();
   const [dateRange, setDateRange] = useState<
     [dayjs.Dayjs, dayjs.Dayjs] | null
   >(null);
@@ -56,26 +58,33 @@ export default function SalesRecords() {
   useEffect(() => {
     const settledParam = searchParams.get("settled");
     const dueParam = searchParams.get("due");
-    if (settledParam === "unsettled" || dueParam === "collection") {
-      setIsSettled(false);
+    if (dueParam === "collection") {
+      setSettlementFilter("due");
+    } else if (settledParam === "unsettled") {
+      setSettlementFilter("unsettled");
     } else {
-      setIsSettled(undefined);
+      setSettlementFilter(undefined);
     }
-    setIsDueCollection(dueParam === "collection" ? true : undefined);
   }, [searchParams]);
 
   const buildParams = useCallback(() => {
     const params: Record<string, unknown> = {};
     if (query) params.q = query;
     if (customerName) params.customer_name = customerName;
-    if (isSettled !== undefined) params.is_settled = isSettled;
-    if (isDueCollection) params.due_collection = true;
+    if (productName) params.product = productName;
+    if (paymentMethod) params.payment_method = paymentMethod;
+    if (settlementFilter === "settled") params.is_settled = true;
+    if (settlementFilter === "unsettled") params.is_settled = false;
+    if (settlementFilter === "due") {
+      params.is_settled = false;
+      params.due_collection = true;
+    }
     if (dateRange) {
       params.start_date = dateRange[0].format("YYYY-MM-DD");
       params.end_date = dateRange[1].format("YYYY-MM-DD");
     }
     return params;
-  }, [query, customerName, isSettled, isDueCollection, dateRange]);
+  }, [query, customerName, productName, paymentMethod, settlementFilter, dateRange]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -94,9 +103,10 @@ export default function SalesRecords() {
     const dueParam = searchParams.get("due");
     setQuery("");
     setCustomerName("");
+    setProductName("");
+    setPaymentMethod("");
     setDateRange(null);
-    setIsSettled(dueParam === "collection" ? false : undefined);
-    setIsDueCollection(dueParam === "collection" ? true : undefined);
+    setSettlementFilter(dueParam === "collection" ? "due" : undefined);
   };
 
   useEffect(() => {
@@ -114,7 +124,7 @@ export default function SalesRecords() {
     setEditingId(null);
     form.resetFields();
     form.setFieldsValue({ sale_time: dayjs(), is_settled: false });
-    setModalOpen(true);
+    setView("form");
   };
 
   const handleEdit = (record: SalesRecord) => {
@@ -125,7 +135,7 @@ export default function SalesRecords() {
       delivery_time: record.delivery_time ? dayjs(record.delivery_time) : null,
       collection_time: record.collection_time ? dayjs(record.collection_time) : null,
     });
-    setModalOpen(true);
+    setView("form");
   };
 
   const handleDelete = async (id: number) => {
@@ -154,7 +164,7 @@ export default function SalesRecords() {
         await salesApi.create(data);
         message.success("新增成功");
       }
-      setModalOpen(false);
+      setView("list");
       fetchData();
     } catch {
       /* form validation or API error */
@@ -162,9 +172,24 @@ export default function SalesRecords() {
   };
 
   const columns: ColumnsType<SalesRecord> = [
-    { title: "时间", dataIndex: "sale_time", width: 120 },
-    { title: "客户名称", dataIndex: "customer_name", width: 120 },
-    { title: "产品", dataIndex: "product", width: 120 },
+    {
+      title: "销售时间",
+      dataIndex: "sale_time",
+      width: 120,
+      render: (value: string) => <Button type="link" onClick={() => setDateRange([dayjs(value), dayjs(value)])}>{value}</Button>,
+    },
+    {
+      title: "客户",
+      dataIndex: "customer_name",
+      width: 120,
+      render: (value: string) => <Button type="link" onClick={() => setCustomerName(value)}>{value}</Button>,
+    },
+    {
+      title: "产品",
+      dataIndex: "product",
+      width: 120,
+      render: (value: string) => <Button type="link" onClick={() => setProductName(value)}>{value}</Button>,
+    },
     {
       title: "金额",
       dataIndex: "amount",
@@ -194,10 +219,21 @@ export default function SalesRecords() {
       width: 90,
       align: "center",
       render: (v: boolean) => (
-        <Tag color={v ? "green" : "red"}>{v ? "已结清" : "未结清"}</Tag>
+        <Tag
+          color={v ? "green" : "red"}
+          style={{ cursor: "pointer" }}
+          onClick={() => setSettlementFilter(v ? "settled" : "unsettled")}
+        >
+          {v ? "已结清" : "未结清"}
+        </Tag>
       ),
     },
-    { title: "交易方式", dataIndex: "payment_method", width: 100 },
+    {
+      title: "交易方式",
+      dataIndex: "payment_method",
+      width: 100,
+      render: (value: string) => value ? <Button type="link" onClick={() => setPaymentMethod(value)}>{value}</Button> : "-",
+    },
     {
       title: "成本",
       dataIndex: "cost",
@@ -225,51 +261,141 @@ export default function SalesRecords() {
       width: 220,
       ellipsis: true,
     },
-    {
-      title: "操作",
-      width: 110,
-      fixed: "right",
-      render: (_, record) => (
-        <Space size="small">
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
+    createActionColumn<SalesRecord>([
+      { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: handleEdit },
+      {
+        key: "delete",
+        label: "删除",
+        icon: <DeleteOutlined />,
+        danger: true,
+        confirmTitle: "确认删除？",
+        onClick: (record) => handleDelete(record.id),
+      },
+    ], 150),
   ];
+
+  if (view === "form") {
+    return (
+      <div>
+        <PageToolbar
+          title={editingId ? "编辑销售记录" : "新增销售记录"}
+          leading={<Button icon={<ArrowLeftOutlined />} onClick={() => setView("list")}>返回</Button>}
+        />
+        <Card>
+          <Form form={form} layout="vertical" style={{ maxWidth: 720 }}>
+            <Space style={{ display: "flex", gap: 16 }} wrap>
+              <Form.Item
+                name="sale_time"
+                label="销售时间"
+                rules={[{ required: true, message: "请选择时间" }]}
+              >
+                <DatePicker style={{ width: 200 }} />
+              </Form.Item>
+              <Form.Item
+                name="customer_name"
+                label="客户"
+                rules={[{ required: true, message: "请选择客户" }]}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  style={{ width: 220 }}
+                  options={customers.map((customer) => ({
+                    label: customer.name,
+                    value: customer.name,
+                  }))}
+                />
+              </Form.Item>
+            </Space>
+            <Form.Item
+              name="product"
+              label="产品"
+              rules={[{ required: true, message: "请选择产品" }]}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                options={products.map((product) => ({
+                  label: product.name,
+                  value: product.name,
+                }))}
+                onChange={(value) => {
+                  const product = products.find((item) => item.name === value);
+                  if (product) {
+                    form.setFieldsValue({ cost: product.purchase_price });
+                  }
+                }}
+              />
+            </Form.Item>
+            <Space style={{ display: "flex", gap: 16 }} wrap>
+              <Form.Item
+                name="amount"
+                label="金额"
+                rules={[{ required: true, message: "请输入金额" }]}
+              >
+                <InputNumber min={0} precision={2} style={{ width: 200 }} />
+              </Form.Item>
+              <Form.Item
+                name="cost"
+                label="成本"
+                rules={[{ required: true, message: "请输入成本" }]}
+              >
+                <InputNumber min={0} precision={2} style={{ width: 200 }} />
+              </Form.Item>
+            </Space>
+            <Space style={{ display: "flex", gap: 16 }} wrap>
+              <Form.Item name="delivery_time" label="收货时间">
+                <DatePicker style={{ width: 200 }} />
+              </Form.Item>
+              <Form.Item name="collection_time" label="收款时间">
+                <DatePicker style={{ width: 200 }} />
+              </Form.Item>
+            </Space>
+            <Form.Item name="payment_method" label="交易方式">
+              <Select
+                showSearch
+                allowClear
+                style={{ width: 240 }}
+                options={["现金", "微信", "支付宝", "银行转账", "月结", "45天", "30天"].map((item) => ({
+                  label: item,
+                  value: item,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="is_settled" label="是否结清" valuePropName="checked">
+              <Switch checkedChildren="已结清" unCheckedChildren="未结清" />
+            </Form.Item>
+            <Form.Item name="notes" label="备注">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+            <Button type="primary" onClick={handleSubmit}>
+              {editingId ? "保存修改" : "保存"}
+            </Button>
+          </Form>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          销售记录
-        </Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增销售记录
-        </Button>
-      </div>
+      <PageToolbar
+        title="销售"
+        searchValue={query}
+        searchPlaceholder="客户/产品/时间"
+        onSearchChange={setQuery}
+        onSearch={() => fetchData()}
+        primaryText="新增销售记录"
+        primaryIcon={<PlusOutlined />}
+        onPrimaryClick={handleAdd}
+      />
 
       <Card style={{ marginBottom: 16 }}>
         <Space wrap>
-          <Input
-            placeholder="可模糊搜索"
-            prefix={<SearchOutlined />}
-            allowClear
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onPressEnter={() => fetchData()}
-            style={{ width: 180 }}
-          />
           <Select
             showSearch
             allowClear
-            placeholder="客户名称"
+            placeholder="客户"
             value={customerName}
             onChange={(value) => setCustomerName(value ?? "")}
             optionFilterProp="label"
@@ -280,25 +406,41 @@ export default function SalesRecords() {
             }))}
           />
           <Select
+            showSearch
+            allowClear
+            placeholder="产品"
+            value={productName || undefined}
+            onChange={(value) => setProductName(value ?? "")}
+            optionFilterProp="label"
+            style={{ width: 180 }}
+            options={products.map((product) => ({
+              label: product.name,
+              value: product.name,
+            }))}
+          />
+          <Select
             placeholder="是否结清"
             allowClear
-            value={isSettled}
-            onChange={(v) => setIsSettled(v)}
-            style={{ width: 120 }}
+            value={settlementFilter}
+            onChange={(value) => setSettlementFilter(value)}
+            style={{ width: 160 }}
             options={[
-              { label: "已结清", value: true },
-              { label: "未结清", value: false },
+              { label: "到期/超时", value: "due" },
+              { label: "未结清", value: "unsettled" },
+              { label: "已结清", value: "settled" },
             ]}
           />
           <Select
-            placeholder="是否到期"
+            showSearch
             allowClear
-            value={isDueCollection}
-            onChange={(v) => setIsDueCollection(v)}
-            style={{ width: 120 }}
-            options={[
-              { label: "已到期", value: true },
-            ]}
+            placeholder="交易方式"
+            value={paymentMethod || undefined}
+            onChange={(value) => setPaymentMethod(value ?? "")}
+            style={{ width: 150 }}
+            options={["现金", "微信", "支付宝", "银行转账", "月结", "45天", "30天"].map((item) => ({
+              label: item,
+              value: item,
+            }))}
           />
           <RangePicker
             allowClear
@@ -309,7 +451,7 @@ export default function SalesRecords() {
             }
           />
           <Button type="primary" onClick={fetchData}>
-            查询
+            筛选
           </Button>
           <Button onClick={handleResetFilters}>重置</Button>
         </Space>
@@ -329,96 +471,6 @@ export default function SalesRecords() {
           }}
         />
       </Card>
-
-      <Modal
-        title={editingId ? "编辑销售记录" : "新增销售记录"}
-        open={modalOpen}
-        onOk={handleSubmit}
-        onCancel={() => setModalOpen(false)}
-        width={600}
-        destroyOnHidden
-      >
-        <Form form={form} layout="vertical">
-          <Space style={{ display: "flex", gap: 16 }}>
-            <Form.Item
-              name="sale_time"
-              label="销售时间"
-              rules={[{ required: true, message: "请选择时间" }]}
-            >
-              <DatePicker style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item
-              name="customer_name"
-              label="客户名称"
-              rules={[{ required: true, message: "请输入客户名称" }]}
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                options={customers.map((customer) => ({
-                  label: customer.name,
-                  value: customer.name,
-                }))}
-              />
-            </Form.Item>
-          </Space>
-          <Form.Item
-            name="product"
-            label="产品"
-            rules={[{ required: true, message: "请输入产品" }]}
-          >
-            <Select
-              showSearch
-              optionFilterProp="label"
-              options={products.map((product) => ({
-                label: product.name,
-                value: product.name,
-              }))}
-              onChange={(value) => {
-                const product = products.find((item) => item.name === value);
-                if (product) {
-                  form.setFieldsValue({ cost: product.purchase_price });
-                }
-              }}
-            />
-          </Form.Item>
-          <Space style={{ display: "flex", gap: 16 }}>
-            <Form.Item
-              name="amount"
-              label="金额"
-              rules={[{ required: true, message: "请输入金额" }]}
-            >
-              <InputNumber min={0} precision={2} style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item
-              name="cost"
-              label="成本"
-              rules={[{ required: true, message: "请输入成本" }]}
-            >
-              <InputNumber min={0} precision={2} style={{ width: "100%" }} />
-            </Form.Item>
-          </Space>
-          <Space style={{ display: "flex", gap: 16 }}>
-            <Form.Item name="delivery_time" label="收货时间">
-              <DatePicker style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item name="collection_time" label="收款时间">
-              <DatePicker style={{ width: "100%" }} />
-            </Form.Item>
-          </Space>
-          <Space style={{ display: "flex", gap: 16 }}>
-            <Form.Item name="payment_method" label="交易方式">
-              <Input />
-            </Form.Item>
-          </Space>
-          <Form.Item name="is_settled" label="是否结清" valuePropName="checked">
-            <Switch checkedChildren="已结清" unCheckedChildren="未结清" />
-          </Form.Item>
-          <Form.Item name="notes" label="备注">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 }
