@@ -1,30 +1,19 @@
 import { useEffect, useState } from "react";
-import {
-  Button,
-  Form,
-  Input,
-  message,
-  Modal,
-  Popconfirm,
-  Space,
-  Table,
-  Typography,
-} from "antd";
-import {
-  DeleteOutlined,
-  EditOutlined,
-  PlusOutlined,
-  SearchOutlined,
-} from "@ant-design/icons";
+import { Button, Card, Form, Input, message, Table } from "antd";
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
+import PageToolbar from "../components/PageToolbar";
+import { createActionColumn } from "../components/TableActions";
 import { customersApi, type Customer, type CustomerForm } from "../api/customers";
 
+type View = "list" | "form";
+
 export default function Customers() {
+  const [view, setView] = useState<View>("list");
   const [data, setData] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm<CustomerForm>();
 
@@ -42,16 +31,21 @@ export default function Customers() {
     fetchData("");
   }, []);
 
+  const fillFilter = (value: string) => {
+    setQuery(value);
+    fetchData(value);
+  };
+
   const openCreate = () => {
     setEditingId(null);
     form.resetFields();
-    setModalOpen(true);
+    setView("form");
   };
 
   const openEdit = (record: Customer) => {
     setEditingId(record.id);
     form.setFieldsValue(record);
-    setModalOpen(true);
+    setView("form");
   };
 
   const handleSubmit = async () => {
@@ -63,7 +57,7 @@ export default function Customers() {
       await customersApi.create(values);
       message.success("客户已新增");
     }
-    setModalOpen(false);
+    setView("list");
     fetchData();
   };
 
@@ -74,51 +68,86 @@ export default function Customers() {
   };
 
   const columns: ColumnsType<Customer> = [
-    { title: "客户名称", dataIndex: "name", width: 180, ellipsis: true },
-    { title: "电话", dataIndex: "phone", width: 150, ellipsis: true },
-    { title: "地址", dataIndex: "address", width: 260, ellipsis: true },
-    { title: "备注", dataIndex: "notes", ellipsis: true },
     {
-      title: "操作",
-      key: "actions",
-      width: 150,
-      fixed: "right",
-      render: (_, record) => (
-        <Space size="small">
-          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm title="确认删除该客户？" onConfirm={() => handleDelete(record.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      title: "客户名称",
+      dataIndex: "name",
+      width: 180,
+      ellipsis: true,
+      render: (value: string) => <Button type="link" onClick={() => fillFilter(value)}>{value}</Button>,
     },
+    {
+      title: "电话",
+      dataIndex: "phone",
+      width: 150,
+      ellipsis: true,
+      render: (value: string) => value ? <Button type="link" onClick={() => fillFilter(value)}>{value}</Button> : "-",
+    },
+    {
+      title: "地址",
+      dataIndex: "address",
+      width: 260,
+      ellipsis: true,
+      render: (value: string) => value ? <Button type="link" onClick={() => fillFilter(value)}>{value}</Button> : "-",
+    },
+    { title: "备注", dataIndex: "notes", ellipsis: true },
+    createActionColumn<Customer>(
+      [
+        { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: openEdit },
+        {
+          key: "delete",
+          label: "删除",
+          icon: <DeleteOutlined />,
+          danger: true,
+          confirmTitle: "确认删除该客户？",
+          onClick: (record) => handleDelete(record.id),
+        },
+      ],
+      150,
+    ),
   ];
+
+  if (view === "form") {
+    return (
+      <div>
+        <PageToolbar
+          title={editingId ? "编辑客户" : "新建客户"}
+          leading={<Button icon={<ArrowLeftOutlined />} onClick={() => setView("list")}>返回</Button>}
+        />
+        <Card>
+          <Form form={form} layout="vertical" style={{ maxWidth: 720 }}>
+            <Form.Item name="name" label="客户名称" rules={[{ required: true, message: "请输入客户名称" }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="phone" label="电话">
+              <Input />
+            </Form.Item>
+            <Form.Item name="address" label="地址">
+              <Input />
+            </Form.Item>
+            <Form.Item name="notes" label="备注">
+              <Input.TextArea rows={3} />
+            </Form.Item>
+            <Button type="primary" onClick={handleSubmit}>
+              {editingId ? "保存修改" : "保存"}
+            </Button>
+          </Form>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, gap: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          客户
-        </Typography.Title>
-        <Space wrap>
-          <Input.Search
-            placeholder="可模糊搜索"
-            allowClear
-            prefix={<SearchOutlined />}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onSearch={(value) => fetchData(value)}
-            style={{ width: 260 }}
-          />
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新建客户
-          </Button>
-        </Space>
-      </div>
+      <PageToolbar
+        title="客户"
+        searchValue={query}
+        searchPlaceholder="客户/电话/地址"
+        onSearchChange={setQuery}
+        onSearch={fetchData}
+        primaryText="新建客户"
+        primaryIcon={<PlusOutlined />}
+        onPrimaryClick={openCreate}
+      />
 
       <Table
         rowKey="id"
@@ -128,53 +157,6 @@ export default function Customers() {
         pagination={{ pageSize: 20, showTotal: (total) => `共 ${total} 条` }}
         scroll={{ x: 900 }}
       />
-
-      <CustomerModal
-        open={modalOpen}
-        editingId={editingId}
-        form={form}
-        onOk={handleSubmit}
-        onCancel={() => setModalOpen(false)}
-      />
     </div>
-  );
-}
-
-function CustomerModal({
-  open,
-  editingId,
-  form,
-  onOk,
-  onCancel,
-}: {
-  open: boolean;
-  editingId: number | null;
-  form: ReturnType<typeof Form.useForm<CustomerForm>>[0];
-  onOk: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <Modal
-      title={editingId ? "编辑客户" : "新建客户"}
-      open={open}
-      onOk={onOk}
-      onCancel={onCancel}
-      destroyOnHidden
-    >
-      <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-        <Form.Item name="name" label="客户名称" rules={[{ required: true, message: "请输入客户名称" }]}>
-          <Input />
-        </Form.Item>
-        <Form.Item name="phone" label="电话">
-          <Input />
-        </Form.Item>
-        <Form.Item name="address" label="地址">
-          <Input />
-        </Form.Item>
-        <Form.Item name="notes" label="备注">
-          <Input.TextArea rows={3} />
-        </Form.Item>
-      </Form>
-    </Modal>
   );
 }
