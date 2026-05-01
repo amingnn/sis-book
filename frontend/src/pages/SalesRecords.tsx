@@ -278,7 +278,8 @@ export default function SalesRecords() {
         confirmTitle: "确认删除？",
         onClick: (record) => handleDelete(record.id),
       },
-    ], 150),
+    ]),
+    // 180
   ];
 
   if (view === "form") {
@@ -389,7 +390,7 @@ export default function SalesRecords() {
       <PageToolbar
         title="销售"
         searchValue={query}
-        searchPlaceholder="客户/产品/时间"
+        searchPlaceholder="模模糊搜索"
         onSearchChange={setQuery}
         onSearch={() => fetchData()}
         primaryText="新增销售记录"

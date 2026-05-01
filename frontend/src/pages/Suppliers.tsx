@@ -96,7 +96,7 @@ export default function Suppliers() {
           onClick: (record) => handleDelete(record.id),
         },
       ],
-      150,
+      // 180,
     ),
   ];
 
@@ -135,7 +135,7 @@ export default function Suppliers() {
       <PageToolbar
         title="厂家"
         searchValue={query}
-        searchPlaceholder="厂家/电话/地址"
+        searchPlaceholder="模糊搜索"
         onSearchChange={setQuery}
         onSearch={fetchData}
         primaryText="新建厂家"

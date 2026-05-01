@@ -240,7 +240,7 @@ export default function Orders() {
         <PageToolbar
           title="开单"
           searchValue={filters.q ?? ""}
-          searchPlaceholder="单号/客户/产品/时间"
+          searchPlaceholder="模糊搜索"
           onSearchChange={(value) => setFilters((prev) => ({ ...prev, q: value || undefined }))}
           onSearch={() => fetchOrders()}
           primaryText="新建销售单"
@@ -342,7 +342,7 @@ export default function Orders() {
                     onClick: (record) => handleDelete(record.id),
                   },
                 ],
-                260,
+                330,
               ),
             ]}
           />

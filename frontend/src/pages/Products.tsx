@@ -127,7 +127,7 @@ export default function Products() {
           onClick: (record) => handleDelete(record.id),
         },
       ],
-      150,
+      // 180,
     ),
   ];
 
@@ -189,7 +189,7 @@ export default function Products() {
       <PageToolbar
         title="产品"
         searchValue={query}
-        searchPlaceholder="产品/箱规"
+        searchPlaceholder="模糊搜索"
         onSearchChange={setQuery}
         onSearch={fetchData}
         primaryText="新建产品"

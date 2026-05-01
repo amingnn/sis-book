@@ -338,7 +338,7 @@ export default function Tasks() {
           onClick: (record) => handleDelete(record.id),
         },
       ],
-      220,
+      250,
     ),
   ];
 
@@ -427,7 +427,7 @@ export default function Tasks() {
       <PageToolbar
         title="任务"
         searchValue={keyword}
-        searchPlaceholder="任务/分类/时间"
+        searchPlaceholder="模糊搜索"
         onSearchChange={setKeyword}
         onSearch={() => fetchData()}
         primaryText="新增任务"

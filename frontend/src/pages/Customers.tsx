@@ -96,7 +96,7 @@ export default function Customers() {
           onClick: (record) => handleDelete(record.id),
         },
       ],
-      150,
+      // 180,
     ),
   ];
 
@@ -135,7 +135,7 @@ export default function Customers() {
       <PageToolbar
         title="客户"
         searchValue={query}
-        searchPlaceholder="客户/电话/地址"
+        searchPlaceholder="模糊搜索"
         onSearchChange={setQuery}
         onSearch={fetchData}
         primaryText="新建客户"

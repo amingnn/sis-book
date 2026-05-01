@@ -196,7 +196,7 @@ export default function Purchases() {
           onClick: (record) => handleDelete(record.id),
         },
       ],
-      150,
+      // 180,
     ),
   ];
 
@@ -225,7 +225,7 @@ export default function Purchases() {
       <PageToolbar
         title="采购"
         searchValue={query}
-        searchPlaceholder="厂家/货物/时间"
+        searchPlaceholder="模糊搜索"
         onSearchChange={setQuery}
         onSearch={() => fetchData()}
         primaryText="新增采购"
