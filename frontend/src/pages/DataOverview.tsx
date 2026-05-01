@@ -12,7 +12,7 @@ import { customersApi, type Customer } from "../api/customers";
 import { productsApi, type Product } from "../api/products";
 import { suppliersApi, type Supplier } from "../api/suppliers";
 import { purchasesApi, type PurchaseOrder } from "../api/purchases";
-import { salesApi, type SalesSummary } from "../api/sales";
+import { salesApi, type SalesRecord, type SalesSummary } from "../api/sales";
 
 interface DashboardData {
   month_sales: number;
@@ -33,6 +33,7 @@ export default function DataOverview() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
+  const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -42,14 +43,16 @@ export default function DataOverview() {
       suppliersApi.list(),
       productsApi.list(),
       purchasesApi.list(),
+      salesApi.list(),
     ])
-      .then(([dashboardRes, summaryRes, customerRes, supplierRes, productRes, purchaseRes]) => {
+      .then(([dashboardRes, summaryRes, customerRes, supplierRes, productRes, purchaseRes, salesRes]) => {
         setDashboard(dashboardRes.data);
         setSalesSummary(summaryRes.data);
         setCustomers(customerRes.data);
         setSuppliers(supplierRes.data);
         setProducts(productRes.data);
         setPurchases(purchaseRes.data);
+        setSalesRecords(salesRes.data);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -67,6 +70,28 @@ export default function DataOverview() {
     () => purchases.reduce((sum, item) => sum + Number(item.unpaid_amount), 0),
     [purchases],
   );
+
+  const salesChartData = useMemo(() => {
+    const today = new Date();
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - 6);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+
+    const sumFrom = (start: Date) =>
+      salesRecords.reduce((sum, record) => {
+        const saleDate = new Date(record.sale_time);
+        return saleDate >= start ? sum + Number(record.amount) : sum;
+      }, 0);
+
+    return [
+      { label: "本周", value: sumFrom(weekStart) },
+      { label: "本月", value: dashboard?.month_sales ?? sumFrom(monthStart) },
+      { label: "本年", value: dashboard?.year_sales ?? sumFrom(yearStart) },
+    ];
+  }, [dashboard, salesRecords]);
+
+  const maxChartValue = Math.max(...salesChartData.map((item) => item.value), 1);
 
   if (loading) {
     return (
@@ -144,6 +169,30 @@ export default function DataOverview() {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col span={24}>
+          <Card title="销售趋势">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+              {salesChartData.map((item) => (
+                <div key={item.label}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <Typography.Text>{item.label}</Typography.Text>
+                    <Typography.Text strong>¥{item.value.toFixed(2)}</Typography.Text>
+                  </div>
+                  <div style={{ height: 160, display: "flex", alignItems: "end", background: "#fafafa", borderRadius: 6, padding: 12 }}>
+                    <div
+                      style={{
+                        width: "100%",
+                        height: `${Math.max(8, (item.value / maxChartValue) * 100)}%`,
+                        background: "#1677ff",
+                        borderRadius: 4,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Col>
         <Col span={12}>
           <Card title="库存关注">
             <Table
