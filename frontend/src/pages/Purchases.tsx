@@ -274,7 +274,7 @@ export default function Purchases() {
           columns={columns}
           dataSource={data}
           loading={loading}
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+          pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
           scroll={{ x: 1280 }}
         />
       </Card>

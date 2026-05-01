@@ -474,7 +474,7 @@ export default function SalesRecords() {
           scroll={{ x: 1490 }}
           pagination={{
             pageSize: 20,
-            showSizeChanger: true,
+            showSizeChanger: false,
             showTotal: (t) => `共 ${t} 条`,
           }}
         />
