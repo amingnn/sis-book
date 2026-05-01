@@ -16,10 +16,11 @@ import {
 import {
   PlusOutlined,
   DeleteOutlined,
-  PrinterOutlined,
   EyeOutlined,
   ArrowLeftOutlined,
   EditOutlined,
+  FileImageOutlined,
+  FilePdfOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -83,6 +84,270 @@ function resolveImageSrc(image?: string): string {
   if (image.startsWith("data:") || image.startsWith("http")) return image;
   return image.startsWith("/") ? image : `/${image}`;
 }
+
+function safeFilename(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, "-");
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function buildPdfFromJpeg(jpegDataUrl: string, imageWidth: number, imageHeight: number): Blob {
+  const encoder = new TextEncoder();
+  const imageBytes = dataUrlToBytes(jpegDataUrl);
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const margin = 24;
+  const scale = Math.min(
+    (pageWidth - margin * 2) / imageWidth,
+    (pageHeight - margin * 2) / imageHeight,
+  );
+  const drawWidth = imageWidth * scale;
+  const drawHeight = imageHeight * scale;
+  const drawX = (pageWidth - drawWidth) / 2;
+  const drawY = pageHeight - margin - drawHeight;
+  const content = `q\n${drawWidth.toFixed(2)} 0 0 ${drawHeight.toFixed(2)} ${drawX.toFixed(2)} ${drawY.toFixed(2)} cm\n/Im1 Do\nQ\n`;
+  const contentBytes = encoder.encode(content);
+  const chunks: Uint8Array[] = [];
+  const offsets = [0];
+  let offset = 0;
+
+  const append = (part: string | Uint8Array) => {
+    const bytes = typeof part === "string" ? encoder.encode(part) : part;
+    chunks.push(bytes);
+    offset += bytes.length;
+  };
+  const startObject = (id: number) => {
+    offsets[id] = offset;
+    append(`${id} 0 obj\n`);
+  };
+  const endObject = () => append("endobj\n");
+
+  append("%PDF-1.4\n");
+  startObject(1);
+  append("<< /Type /Catalog /Pages 2 0 R >>\n");
+  endObject();
+  startObject(2);
+  append("<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n");
+  endObject();
+  startObject(3);
+  append(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>\n`);
+  endObject();
+  startObject(4);
+  append(`<< /Length ${contentBytes.length} >>\nstream\n`);
+  append(contentBytes);
+  append("endstream\n");
+  endObject();
+  startObject(5);
+  append(`<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`);
+  append(imageBytes);
+  append("\nendstream\n");
+  endObject();
+
+  const xrefOffset = offset;
+  append("xref\n0 6\n0000000000 65535 f \n");
+  for (let id = 1; id <= 5; id += 1) {
+    append(`${String(offsets[id]).padStart(10, "0")} 00000 n \n`);
+  }
+  append(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+  return new Blob(chunks.map(bytesToArrayBuffer), { type: "application/pdf" });
+}
+
+async function captureSlipCanvas(element: HTMLElement): Promise<HTMLCanvasElement> {
+  const width = Math.ceil(element.scrollWidth);
+  const height = Math.ceil(element.scrollHeight);
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll("img").forEach((image) => {
+    const src = image.getAttribute("src");
+    if (src && !src.startsWith("data:") && !src.startsWith("http")) {
+      image.setAttribute("src", new URL(src, window.location.origin).href);
+    }
+  });
+  const markup = new XMLSerializer().serializeToString(clone);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+      <foreignObject width="100%" height="100%">
+        <div xmlns="http://www.w3.org/1999/xhtml">
+          <style>${slipStyles}</style>
+          ${markup}
+        </div>
+      </foreignObject>
+    </svg>
+  `;
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = width * window.devicePixelRatio;
+    canvas.height = height * window.devicePixelRatio;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas context unavailable");
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+const slipStyles = `
+  .slip {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 24px 28px 28px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    font-family: "SimSun", "宋体", serif;
+    font-size: 13px;
+    color: #333;
+    box-sizing: border-box;
+  }
+  .slip-title {
+    text-align: center;
+    font-size: 22px;
+    font-weight: bold;
+    color: #1a5276;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 6px;
+    margin: 0 0 12px;
+    letter-spacing: 6px;
+  }
+  .slip-info {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+    table-layout: fixed;
+  }
+  .slip-info td {
+    font-size: 13px;
+    border: 1px solid #999;
+    padding: 5px 8px;
+    word-break: break-all;
+  }
+  .slip-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 0;
+    table-layout: fixed;
+  }
+  .slip-table th,
+  .slip-table td {
+    border: 1px solid #999;
+    padding: 6px 4px;
+    text-align: center;
+    font-size: 12px;
+    vertical-align: middle;
+    word-break: break-word;
+  }
+  .slip-table th {
+    background: #d6eaf8;
+    font-weight: 600;
+    color: #1a5276;
+  }
+  .slip-item-image {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+  }
+  .slip-total-row td {
+    font-weight: bold;
+    background: #eaf2f8;
+  }
+  .slip-amount-row {
+    border: 1px solid #999;
+    border-top: none;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .slip-highlight-row {
+    border: 1px solid #999;
+    border-top: none;
+    padding: 6px 8px;
+    font-size: 13px;
+    background: #fef9e7;
+  }
+  .slip-notes-row {
+    border: 1px solid #999;
+    border-top: none;
+    padding: 6px 8px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .slip-footer-info {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0;
+    table-layout: fixed;
+  }
+  .slip-footer-info td {
+    border: 1px solid #999;
+    padding: 8px 10px;
+    font-size: 12px;
+    vertical-align: middle;
+  }
+  .slip-sign-cell {
+    width: 220px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  @media print {
+    body * { visibility: hidden; }
+    .slip, .slip * { visibility: visible; }
+    .slip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      border: none;
+      max-width: none;
+      padding: 12px 14px 18px;
+    }
+    .no-print { display: none !important; }
+    .slip-table tr,
+    .slip-info tr,
+    .slip-footer-info tr,
+    .slip-amount-row,
+    .slip-highlight-row,
+    .slip-notes-row {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+  }
+`;
 
 export default function Orders() {
   const [view, setView] = useState<View>("list");
@@ -228,7 +493,36 @@ export default function Orders() {
     setView("detail");
   };
 
-  const handlePrint = () => window.print();
+  const handleExportImage = async () => {
+    if (!printRef.current || !currentOrder) return;
+    try {
+      const canvas = await captureSlipCanvas(printRef.current);
+      const dataUrl = canvas.toDataURL("image/png");
+      const bytes = dataUrlToBytes(dataUrl);
+      downloadBlob(
+        new Blob([bytesToArrayBuffer(bytes)], { type: "image/png" }),
+        `${safeFilename(currentOrder.order_number || "销售单")}.png`,
+      );
+    } catch {
+      message.error("导出图片失败，请确认销售单图片可以正常显示");
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!printRef.current || !currentOrder) return;
+    try {
+      const canvas = await captureSlipCanvas(printRef.current);
+      const pdf = buildPdfFromJpeg(
+        canvas.toDataURL("image/jpeg", 0.92),
+        canvas.width,
+        canvas.height,
+      );
+      downloadBlob(pdf, `${safeFilename(currentOrder.order_number || "销售单")}.pdf`);
+    } catch {
+      message.error("导出 PDF 失败，请确认销售单图片可以正常显示");
+    }
+  };
+
   const updateFilters = (nextFilters: SalesOrderListParams) => {
     setFilters(nextFilters);
   };
@@ -332,7 +626,6 @@ export default function Orders() {
                 [
                   { key: "view", label: "查看", icon: <EyeOutlined />, onClick: (record) => handleView(record.id) },
                   { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: (record) => handleEdit(record.id) },
-                  { key: "print", label: "打印", icon: <PrinterOutlined />, onClick: (record) => { void handleView(record.id); } },
                   {
                     key: "delete",
                     label: "删除",
@@ -342,7 +635,7 @@ export default function Orders() {
                     onClick: (record) => handleDelete(record.id),
                   },
                 ],
-                330,
+                240,
               ),
             ]}
           />
@@ -572,7 +865,8 @@ export default function Orders() {
         <Button icon={<ArrowLeftOutlined />} onClick={() => setView("list")}>返回</Button>
         <Typography.Title level={4} style={{ margin: 0 }}>销售单详情</Typography.Title>
         <Button icon={<EditOutlined />} onClick={() => handleEdit(order.id)}>编辑</Button>
-        <Button type="primary" icon={<PrinterOutlined />} onClick={handlePrint}>打印</Button>
+        <Button icon={<FileImageOutlined />} onClick={() => void handleExportImage()}>导出图片</Button>
+        <Button type="primary" icon={<FilePdfOutlined />} onClick={() => void handleExportPdf()}>导出 PDF</Button>
       </div>
 
       <div ref={printRef} className="slip">
@@ -681,133 +975,7 @@ export default function Orders() {
         </table>
       </div>
 
-      <style>{`
-        .slip {
-          max-width: 820px;
-          margin: 0 auto;
-          padding: 24px 28px 28px;
-          background: #fff;
-          border: 1px solid #e0e0e0;
-          font-family: "SimSun", "宋体", serif;
-          font-size: 13px;
-          color: #333;
-          box-sizing: border-box;
-        }
-        .slip-title {
-          text-align: center;
-          font-size: 22px;
-          font-weight: bold;
-          color: #1a5276;
-          border-bottom: 2px solid #2980b9;
-          padding-bottom: 6px;
-          margin: 0 0 12px;
-          letter-spacing: 6px;
-        }
-        .slip-info {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 10px;
-          table-layout: fixed;
-        }
-        .slip-info td {
-          font-size: 13px;
-          border: 1px solid #999;
-          padding: 5px 8px;
-          word-break: break-all;
-        }
-        .slip-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 0;
-          table-layout: fixed;
-        }
-        .slip-table th,
-        .slip-table td {
-          border: 1px solid #999;
-          padding: 6px 4px;
-          text-align: center;
-          font-size: 12px;
-          vertical-align: middle;
-          word-break: break-word;
-        }
-        .slip-table th {
-          background: #d6eaf8;
-          font-weight: 600;
-          color: #1a5276;
-        }
-        .slip-item-image {
-          width: 64px;
-          height: 64px;
-          object-fit: contain;
-          display: block;
-          margin: 0 auto;
-        }
-        .slip-total-row td {
-          font-weight: bold;
-          background: #eaf2f8;
-        }
-        .slip-amount-row {
-          border: 1px solid #999;
-          border-top: none;
-          padding: 6px 8px;
-          font-size: 13px;
-        }
-        .slip-highlight-row {
-          border: 1px solid #999;
-          border-top: none;
-          padding: 6px 8px;
-          font-size: 13px;
-          background: #fef9e7;
-        }
-        .slip-notes-row {
-          border: 1px solid #999;
-          border-top: none;
-          padding: 6px 8px;
-          font-size: 12px;
-          line-height: 1.6;
-        }
-        .slip-footer-info {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 0;
-          table-layout: fixed;
-        }
-        .slip-footer-info td {
-          border: 1px solid #999;
-          padding: 8px 10px;
-          font-size: 12px;
-          vertical-align: middle;
-        }
-        .slip-sign-cell {
-          width: 220px;
-          text-align: left;
-          white-space: nowrap;
-        }
-
-        @media print {
-          body * { visibility: hidden; }
-          .slip, .slip * { visibility: visible; }
-          .slip {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            border: none;
-            max-width: none;
-            padding: 12px 14px 18px;
-          }
-          .no-print { display: none !important; }
-          .slip-table tr,
-          .slip-info tr,
-          .slip-footer-info tr,
-          .slip-amount-row,
-          .slip-highlight-row,
-          .slip-notes-row {
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-        }
-      `}</style>
+      <style>{slipStyles}</style>
     </div>
   );
 }
