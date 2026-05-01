@@ -67,7 +67,6 @@ def seed():
         session.add(
             Product(
                 name=name,
-                supplier_name=ref["supplier_name"],
                 per_box_qty=ref["per_box_qty"],
                 box_spec=ref["box_spec"],
                 volume=ref["volume"],

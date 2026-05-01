@@ -4,7 +4,6 @@ export interface Product {
   id: number;
   name: string;
   image: string;
-  supplier_name: string;
   per_box_qty: number;
   box_spec: string;
   volume: number;
@@ -18,7 +17,6 @@ export interface Product {
 export interface ProductForm {
   name: string;
   image?: string;
-  supplier_name?: string;
   per_box_qty?: number;
   box_spec?: string;
   volume?: number;

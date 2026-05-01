@@ -11,7 +11,6 @@ def list_products(session: Session, query: str | None = None) -> list[Product]:
         stmt = stmt.where(
             or_(
                 col(Product.name).contains(query),
-                col(Product.supplier_name).contains(query),
                 col(Product.box_spec).contains(query),
                 col(Product.notes).contains(query),
             )

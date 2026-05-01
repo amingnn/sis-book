@@ -126,14 +126,15 @@ def test_run_migrations_adds_missing_columns_backfills_data_and_records_versions
         product = conn.execute(
             text(
                 """
-                SELECT image, supplier_name, per_box_qty, box_spec, purchase_price, stock_qty
+                SELECT image, per_box_qty, box_spec, purchase_price, stock_qty
                 FROM product
                 WHERE name = '羽毛球'
                 """
             )
         ).one()
-        assert product == ("img/migrated.png", "胜利厂家", 12, "60*40*30", 2.5, 36)
-        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 6
+        assert product == ("img/migrated.png", 12, "60*40*30", 2.5, 36)
+        assert "supplier_name" not in _column_names(conn, "product")
+        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 7
 
 
 def test_run_migrations_is_idempotent(monkeypatch, tmp_path):
@@ -198,4 +199,81 @@ def test_run_migrations_is_idempotent(monkeypatch, tmp_path):
     migrations.run_migrations(engine)
 
     with engine.begin() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 6
+        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 7
+
+
+def test_run_migrations_drops_product_supplier_name_destructively(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'migrations-drop-product-supplier.db'}")
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE schema_migrations (
+                    version INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        for version in range(1, 7):
+            conn.execute(
+                text("INSERT INTO schema_migrations(version, name) VALUES (:version, :name)"),
+                {"version": version, "name": f"migration_{version}"},
+            )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE product (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    image TEXT NOT NULL DEFAULT '',
+                    supplier_name TEXT NOT NULL DEFAULT '',
+                    per_box_qty INTEGER NOT NULL DEFAULT 0,
+                    box_spec TEXT NOT NULL DEFAULT '',
+                    volume NUMERIC NOT NULL DEFAULT 0,
+                    purchase_price NUMERIC NOT NULL DEFAULT 0,
+                    stock_qty INTEGER NOT NULL DEFAULT 0,
+                    notes TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO product (
+                    id,
+                    name,
+                    image,
+                    supplier_name,
+                    per_box_qty,
+                    box_spec,
+                    volume,
+                    purchase_price,
+                    stock_qty,
+                    notes
+                )
+                VALUES (1, '羽毛球', 'img/product.png', '胜利厂家', 12, '60*40*30', 0.072, 2.5, 120, '热销')
+                """
+            )
+        )
+
+    migrations.run_migrations(engine)
+
+    with engine.begin() as conn:
+        assert "supplier_name" not in _column_names(conn, "product")
+        product = conn.execute(
+            text(
+                """
+                SELECT name, image, per_box_qty, box_spec, volume, purchase_price, stock_qty, notes
+                FROM product
+                WHERE id = 1
+                """
+            )
+        ).one()
+        assert product == ("羽毛球", "img/product.png", 12, "60*40*30", 0.072, 2.5, 120, "热销")
+        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 7

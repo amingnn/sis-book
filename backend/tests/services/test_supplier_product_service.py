@@ -4,9 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from app.product import service as product_service
-from app.product.models import Product, ProductCreate, ProductUpdate
+from app.product.models import ProductCreate, ProductUpdate
 from app.supplier import service as supplier_service
-from app.supplier.models import Supplier, SupplierCreate, SupplierUpdate
+from app.supplier.models import SupplierCreate, SupplierUpdate
 
 
 def test_supplier_crud_and_search(session):
@@ -49,7 +49,6 @@ def test_product_crud_and_search(session):
         ProductCreate(
             name="羽毛球",
             image="img/product.png",
-            supplier_name="胜利厂家",
             per_box_qty=12,
             box_spec="60*40*30",
             volume=Decimal("0.072"),
@@ -59,7 +58,7 @@ def test_product_crud_and_search(session):
     )
 
     assert product.id is not None
-    assert product_service.list_products(session, query="胜利")[0].name == "羽毛球"
+    assert product_service.list_products(session, query="60*40")[0].name == "羽毛球"
 
     updated = product_service.update_product(
         session,

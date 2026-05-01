@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Form, Image, Input, InputNumber, message, Select, Space, Table } from "antd";
+import { Button, Card, Form, Image, Input, InputNumber, message, Space, Table } from "antd";
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
 import PageToolbar from "../components/PageToolbar";
 import { createActionColumn } from "../components/TableActions";
 import { productsApi, type Product, type ProductForm } from "../api/products";
-import { suppliersApi, type Supplier } from "../api/suppliers";
 
 type View = "list" | "form";
 
@@ -19,7 +18,6 @@ function resolveImageSrc(image?: string): string {
 export default function Products() {
   const [view, setView] = useState<View>("list");
   const [data, setData] = useState<Product[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -38,13 +36,7 @@ export default function Products() {
 
   useEffect(() => {
     fetchData("");
-    suppliersApi.list().then((res) => setSuppliers(res.data));
   }, []);
-
-  const fillFilter = (value: string) => {
-    setQuery(value);
-    fetchData(value);
-  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -104,14 +96,6 @@ export default function Products() {
       dataIndex: "name",
       width: 180,
       ellipsis: true,
-      render: (value: string) => <Button type="link" onClick={() => fillFilter(value)}>{value}</Button>,
-    },
-    {
-      title: "厂家",
-      dataIndex: "supplier_name",
-      width: 160,
-      ellipsis: true,
-      render: (value: string) => value ? <Button type="link" onClick={() => fillFilter(value)}>{value}</Button> : "-",
     },
     { title: "装箱数", dataIndex: "per_box_qty", width: 90, align: "right" },
     { title: "箱规", dataIndex: "box_spec", width: 120, ellipsis: true },
@@ -171,17 +155,6 @@ export default function Products() {
                 style={{ objectFit: "contain", marginBottom: 16 }}
               />
             ) : null}
-            <Form.Item name="supplier_name" label="厂家">
-              <Select
-                showSearch
-                allowClear
-                optionFilterProp="label"
-                options={suppliers.map((supplier) => ({
-                  label: supplier.name,
-                  value: supplier.name,
-                }))}
-              />
-            </Form.Item>
             <Space style={{ display: "flex", gap: 12 }} wrap>
               <Form.Item name="per_box_qty" label="装箱数">
                 <InputNumber min={0} style={{ width: 180 }} />
@@ -216,7 +189,7 @@ export default function Products() {
       <PageToolbar
         title="产品"
         searchValue={query}
-        searchPlaceholder="产品/厂家/箱规"
+        searchPlaceholder="产品/箱规"
         onSearchChange={setQuery}
         onSearch={fetchData}
         primaryText="新建产品"

@@ -140,7 +140,6 @@ def _migration_6_create_supplier_product_tables(conn) -> None:
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
                 image TEXT NOT NULL DEFAULT '',
-                supplier_name TEXT NOT NULL DEFAULT '',
                 per_box_qty INTEGER NOT NULL DEFAULT 0,
                 box_spec TEXT NOT NULL DEFAULT '',
                 volume NUMERIC NOT NULL DEFAULT 0,
@@ -198,14 +197,12 @@ def _migration_6_create_supplier_product_tables(conn) -> None:
                 """
                 INSERT OR IGNORE INTO product (
                     name,
-                    supplier_name,
                     per_box_qty,
                     purchase_price,
                     stock_qty
                 )
                 SELECT
                     TRIM(product_name),
-                    COALESCE(MAX(NULLIF(TRIM(supplier_name), '')), ''),
                     COALESCE(MAX(per_box_qty), 0),
                     COALESCE(MAX(unit_price), 0),
                     0
@@ -220,18 +217,6 @@ def _migration_6_create_supplier_product_tables(conn) -> None:
                 """
                 UPDATE product
                 SET
-                    supplier_name = COALESCE(
-                        NULLIF(supplier_name, ''),
-                        (
-                            SELECT po.supplier_name
-                            FROM purchaseorder AS po
-                            WHERE TRIM(po.product_name) = product.name
-                              AND COALESCE(TRIM(po.supplier_name), '') != ''
-                            ORDER BY po.purchase_time DESC, po.id DESC
-                            LIMIT 1
-                        ),
-                        ''
-                    ),
                     purchase_price = COALESCE(
                         NULLIF(purchase_price, 0),
                         (
@@ -261,6 +246,71 @@ def _migration_6_create_supplier_product_tables(conn) -> None:
         )
 
 
+def _migration_7_drop_product_supplier_name(conn) -> None:
+    inspector = inspect(conn)
+    tables = set(inspector.get_table_names())
+    if "product" not in tables:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("product")}
+    if "supplier_name" not in columns:
+        return
+
+    conn.execute(
+        text(
+            """
+            CREATE TABLE product_without_supplier (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                image TEXT NOT NULL DEFAULT '',
+                per_box_qty INTEGER NOT NULL DEFAULT 0,
+                box_spec TEXT NOT NULL DEFAULT '',
+                volume NUMERIC NOT NULL DEFAULT 0,
+                purchase_price NUMERIC NOT NULL DEFAULT 0,
+                stock_qty INTEGER NOT NULL DEFAULT 0,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            INSERT INTO product_without_supplier (
+                id,
+                name,
+                image,
+                per_box_qty,
+                box_spec,
+                volume,
+                purchase_price,
+                stock_qty,
+                notes,
+                created_at,
+                updated_at
+            )
+            SELECT
+                id,
+                name,
+                COALESCE(image, ''),
+                COALESCE(per_box_qty, 0),
+                COALESCE(box_spec, ''),
+                COALESCE(volume, 0),
+                COALESCE(purchase_price, 0),
+                COALESCE(stock_qty, 0),
+                COALESCE(notes, ''),
+                COALESCE(created_at, CURRENT_TIMESTAMP),
+                COALESCE(updated_at, CURRENT_TIMESTAMP)
+            FROM product
+            """
+        )
+    )
+    conn.execute(text("DROP TABLE product"))
+    conn.execute(text("ALTER TABLE product_without_supplier RENAME TO product"))
+
+
 MIGRATIONS = [
     Migration(1, "add_salesorderitem_image", _migration_1_add_salesorderitem_image),
     Migration(2, "backfill_order_level_images", _migration_2_backfill_order_level_images),
@@ -268,6 +318,7 @@ MIGRATIONS = [
     Migration(4, "add_purchase_paid_amount", _migration_4_add_purchase_paid_amount),
     Migration(5, "create_task_table", _migration_5_create_task_table),
     Migration(6, "create_supplier_product_tables", _migration_6_create_supplier_product_tables),
+    Migration(7, "drop_product_supplier_name", _migration_7_drop_product_supplier_name),
 ]
 
 

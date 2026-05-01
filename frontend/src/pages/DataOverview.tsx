@@ -202,7 +202,6 @@ export default function DataOverview() {
               dataSource={[...products].sort((a, b) => a.stock_qty - b.stock_qty).slice(0, 8)}
               columns={[
                 { title: "产品", dataIndex: "name" },
-                { title: "厂家", dataIndex: "supplier_name" },
                 {
                   title: "库存",
                   dataIndex: "stock_qty",

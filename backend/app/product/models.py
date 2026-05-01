@@ -14,7 +14,6 @@ def _validate_required_name(name: str | None) -> str:
 class ProductBase(SQLModel):
     name: str
     image: str = ""
-    supplier_name: str = ""
     per_box_qty: int = 0
     box_spec: str = ""
     volume: Decimal = Field(default=Decimal("0"), max_digits=12, decimal_places=3)
@@ -41,7 +40,6 @@ class ProductCreate(ProductBase):
 class ProductUpdate(SQLModel):
     name: str | None = None
     image: str | None = None
-    supplier_name: str | None = None
     per_box_qty: int | None = None
     box_spec: str | None = None
     volume: Decimal | None = None
