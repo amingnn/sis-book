@@ -41,7 +41,13 @@ export default function AppLayout() {
         collapsed={collapsed}
         onCollapse={setCollapsed}
         theme="light"
-        style={{ borderRight: "1px solid #f0f0f0" }}
+        style={{
+          borderRight: "1px solid #f0f0f0",
+          height: "100vh",
+          overflow: "auto",
+          position: "sticky",
+          top: 0,
+        }}
       >
         <div
           style={{
