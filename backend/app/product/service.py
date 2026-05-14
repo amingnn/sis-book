@@ -1,33 +1,22 @@
-from datetime import datetime
+from sqlmodel import Session, col, select
 
-from sqlmodel import Session, col, or_, select
-
+from app.common.crud import create_entity, delete_entity, get_entity, update_entity
+from app.common.query import apply_fuzzy_search
 from app.product.models import Product, ProductCreate, ProductUpdate
 
 
 def list_products(session: Session, query: str | None = None) -> list[Product]:
     stmt = select(Product).order_by(col(Product.updated_at).desc())
-    if query:
-        stmt = stmt.where(
-            or_(
-                col(Product.name).contains(query),
-                col(Product.box_spec).contains(query),
-                col(Product.notes).contains(query),
-            )
-        )
+    stmt = apply_fuzzy_search(stmt, query, [Product.name, Product.box_spec, Product.notes])
     return list(session.exec(stmt).all())
 
 
 def get_product(session: Session, product_id: int) -> Product | None:
-    return session.get(Product, product_id)
+    return get_entity(session, Product, product_id)
 
 
 def create_product(session: Session, data: ProductCreate) -> Product:
-    product = Product.model_validate(data)
-    session.add(product)
-    session.commit()
-    session.refresh(product)
-    return product
+    return create_entity(session, Product, data)
 
 
 def update_product(session: Session, product_id: int, data: ProductUpdate) -> Product | None:
@@ -35,12 +24,7 @@ def update_product(session: Session, product_id: int, data: ProductUpdate) -> Pr
     if not product:
         return None
 
-    product.sqlmodel_update(data.model_dump(exclude_unset=True, exclude_none=True))
-    product.updated_at = datetime.now()
-    session.add(product)
-    session.commit()
-    session.refresh(product)
-    return product
+    return update_entity(session, product, data)
 
 
 def delete_product(session: Session, product_id: int) -> bool:
@@ -48,6 +32,5 @@ def delete_product(session: Session, product_id: int) -> bool:
     if not product:
         return False
 
-    session.delete(product)
-    session.commit()
+    delete_entity(session, product)
     return True

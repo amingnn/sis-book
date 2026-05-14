@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
+from app.common.errors import raise_not_found
 from app.database import get_session
 from app.supplier import service
 from app.supplier.models import SupplierCreate, SupplierResponse, SupplierUpdate
@@ -20,7 +21,7 @@ def read_suppliers(
 def read_supplier(supplier_id: int, session: Session = Depends(get_session)):
     if supplier := service.get_supplier(session, supplier_id):
         return supplier
-    raise HTTPException(status_code=404, detail="厂家不存在")
+    raise_not_found("厂家不存在")
 
 
 @router.post("", response_model=SupplierResponse, status_code=201)
@@ -36,10 +37,10 @@ def update_supplier(
 ):
     if supplier := service.update_supplier(session, supplier_id, data):
         return supplier
-    raise HTTPException(status_code=404, detail="厂家不存在")
+    raise_not_found("厂家不存在")
 
 
 @router.delete("/{supplier_id}", status_code=204)
 def delete_supplier(supplier_id: int, session: Session = Depends(get_session)):
     if not service.delete_supplier(session, supplier_id):
-        raise HTTPException(status_code=404, detail="厂家不存在")
+        raise_not_found("厂家不存在")

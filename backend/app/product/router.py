@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
+from app.common.errors import raise_not_found
 from app.database import get_session
 from app.product import service
 from app.product.models import ProductCreate, ProductResponse, ProductUpdate
@@ -20,7 +21,7 @@ def read_products(
 def read_product(product_id: int, session: Session = Depends(get_session)):
     if product := service.get_product(session, product_id):
         return product
-    raise HTTPException(status_code=404, detail="产品不存在")
+    raise_not_found("产品不存在")
 
 
 @router.post("", response_model=ProductResponse, status_code=201)
@@ -36,10 +37,10 @@ def update_product(
 ):
     if product := service.update_product(session, product_id, data):
         return product
-    raise HTTPException(status_code=404, detail="产品不存在")
+    raise_not_found("产品不存在")
 
 
 @router.delete("/{product_id}", status_code=204)
 def delete_product(product_id: int, session: Session = Depends(get_session)):
     if not service.delete_product(session, product_id):
-        raise HTTPException(status_code=404, detail="产品不存在")
+        raise_not_found("产品不存在")

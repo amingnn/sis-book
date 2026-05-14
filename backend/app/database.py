@@ -3,21 +3,38 @@ import shutil
 import sqlite3
 from pathlib import Path
 
+from sqlalchemy import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import DATABASE_PATH, DATABASE_URL
 from app.migrations import run_migrations
 
-engine = create_engine(DATABASE_URL, echo=False)
+
+def create_database_engine(database_url: str = DATABASE_URL) -> Engine:
+    return create_engine(database_url, echo=False)
 
 
-def init_db() -> None:
-    SQLModel.metadata.create_all(engine)
-    run_migrations(engine)
+engine = create_database_engine()
+
+
+def get_engine() -> Engine:
+    return engine
+
+
+def configure_engine(database_url: str = DATABASE_URL) -> Engine:
+    global engine
+    engine = create_database_engine(database_url)
+    return engine
+
+
+def init_db(db_engine: Engine | None = None) -> None:
+    active_engine = db_engine or get_engine()
+    SQLModel.metadata.create_all(active_engine)
+    run_migrations(active_engine)
 
 
 def get_session() -> Generator[Session, None, None]:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         yield session
 
 
@@ -28,7 +45,6 @@ def export_database_snapshot(target_path: Path) -> None:
 
 
 def replace_database_from(source_path: Path) -> None:
-    global engine
     engine.dispose()
     shutil.copy2(source_path, DATABASE_PATH)
-    engine = create_engine(DATABASE_URL, echo=False)
+    configure_engine(DATABASE_URL)

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
+
+from app.common.errors import raise_not_found
 from app.customer.models import CustomerCreate, CustomerResponse, CustomerUpdate
 from app.database import get_session
 from app.customer import service
@@ -22,7 +24,7 @@ def read_customer(customer_id: int, session: Session = Depends(get_session)):
     if customer := service.get_customer(session, customer_id):
         return customer
     else:
-        raise HTTPException(status_code=404, detail="客户不存在")
+        raise_not_found("客户不存在")
 
 
 @router.post("", response_model=CustomerResponse, status_code=201)
@@ -36,10 +38,10 @@ def update_customer(customer_id: int, data: CustomerUpdate, session: Session = D
     if customer := service.update_customer(session, customer_id=customer_id, data=data):
         return customer
     else:
-        raise HTTPException(status_code=404, detail="客户不存在")
+        raise_not_found("客户不存在")
     
 
 @router.delete("/{customer_id}", status_code=204)
 def delete_customer(customer_id: int, session: Session = Depends(get_session)):
     if not service.delete_customer(session, customer_id=customer_id):
-        raise HTTPException(status_code=404, detail="客户不存在")
+        raise_not_found("客户不存在")
