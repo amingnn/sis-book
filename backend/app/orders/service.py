@@ -9,7 +9,6 @@ from app.orders.models import (
     SalesOrderItem,
     SalesOrderUpdate,
 )
-from app.orders.images import store_order_item_image
 from app.sales.models import SalesRecord
 
 
@@ -133,14 +132,8 @@ def create_order(session: Session, data: SalesOrderCreate) -> SalesOrder:
     )
     order.order_number = _generate_order_number(session, data.sales_date)
 
-    for index, item_data in enumerate(data.items):
+    for item_data in data.items:
         item_payload = item_data.model_dump()
-        item_payload["image"] = store_order_item_image(
-            item_payload.get("image", ""),
-            order.order_number,
-            item_payload.get("product_name", ""),
-            index,
-        )
         item = SalesOrderItem(**item_payload)
         order.items.append(item)
 
@@ -170,14 +163,8 @@ def update_order(
     order.notes = data.notes
 
     order.items.clear()
-    for index, item_data in enumerate(data.items):
+    for item_data in data.items:
         item_payload = item_data.model_dump()
-        item_payload["image"] = store_order_item_image(
-            item_payload.get("image", ""),
-            order.order_number,
-            item_payload.get("product_name", ""),
-            index,
-        )
         order.items.append(SalesOrderItem(**item_payload))
 
     session.add(order)

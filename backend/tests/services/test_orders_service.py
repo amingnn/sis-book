@@ -58,19 +58,13 @@ def test_order_helpers_build_expected_values():
     assert orders_service._build_order_sales_notes(order) == "开单单号：MC20260420001\n加急"
 
 
-def test_create_order_creates_matching_sales_record(session, monkeypatch):
-    monkeypatch.setattr(
-        orders_service,
-        "store_order_item_image",
-        lambda image, order_number, product_name, index: f"img/{order_number}-{product_name}-{index}.png" if image else "",
-    )
-
+def test_create_order_creates_matching_sales_record(session):
     created = orders_service.create_order(session, _order_payload())
     sales_record = session.get(SalesRecord, created.sales_record_id)
 
     assert created.order_number == "MC20260420001"
     assert [item.image for item in created.items] == [
-        "img/MC20260420001-羽毛球-0.png",
+        "raw-image",
         "",
     ]
     assert sales_record is not None
@@ -82,12 +76,7 @@ def test_create_order_creates_matching_sales_record(session, monkeypatch):
     assert sales_record.notes == "开单单号：MC20260420001\n备注"
 
 
-def test_update_order_reuses_sales_record_and_replaces_items(session, monkeypatch):
-    monkeypatch.setattr(
-        orders_service,
-        "store_order_item_image",
-        lambda image, order_number, product_name, index: f"img/{product_name}-{index}.png" if image else "",
-    )
+def test_update_order_reuses_sales_record_and_replaces_items(session):
     created = orders_service.create_order(session, _order_payload())
     sales_record_id = created.sales_record_id
 
@@ -111,7 +100,7 @@ def test_update_order_reuses_sales_record_and_replaces_items(session, monkeypatc
     assert updated.sales_record_id == sales_record_id
     assert len(updated.items) == 1
     assert updated.items[0].product_name == "足球"
-    assert updated.items[0].image == "img/足球-0.png"
+    assert updated.items[0].image == "new-image"
     assert sales_record is not None
     assert sales_record.customer_name == "李四"
     assert sales_record.product == "足球"
@@ -120,8 +109,7 @@ def test_update_order_reuses_sales_record_and_replaces_items(session, monkeypatc
     assert sales_record.notes == f"开单单号：{updated.order_number}\n已改单"
 
 
-def test_delete_order_removes_related_sales_record(session, monkeypatch):
-    monkeypatch.setattr(orders_service, "store_order_item_image", lambda *args: "")
+def test_delete_order_removes_related_sales_record(session):
     created = orders_service.create_order(session, _order_payload())
 
     deleted = orders_service.delete_order(session, created.id)

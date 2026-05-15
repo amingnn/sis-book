@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Button,
   Card,
@@ -11,7 +11,6 @@ import {
   Space,
   Table,
   Typography,
-  Upload,
 } from "antd";
 import {
   PlusOutlined,
@@ -21,10 +20,10 @@ import {
   EditOutlined,
   FileImageOutlined,
   FilePdfOutlined,
-  UploadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
+import html2canvas from "html2canvas";
 import {
   ordersApi,
   type SalesOrder,
@@ -36,6 +35,29 @@ import { customersApi, type Customer } from "../api/customers";
 import { productsApi, type Product } from "../api/products";
 import PageToolbar from "../components/PageToolbar";
 import { createActionColumn } from "../components/TableActions";
+
+type DesktopSavePayload = {
+  filename: string;
+  data_url: string;
+  file_types?: string[];
+};
+
+type DesktopSaveResult = {
+  saved?: boolean;
+  cancelled?: boolean;
+  path?: string;
+  error?: string;
+};
+
+declare global {
+  interface Window {
+    pywebview?: {
+      api?: {
+        save_file?: (payload: DesktopSavePayload) => Promise<DesktopSaveResult>;
+      };
+    };
+  }
+}
 
 type View = "list" | "create" | "detail";
 
@@ -98,6 +120,32 @@ function downloadBlob(blob: Blob, filename: string) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function saveExportBlob(blob: Blob, filename: string, fileTypes: string[]): Promise<boolean> {
+  if (window.pywebview?.api?.save_file) {
+    const result = await window.pywebview.api.save_file({
+      filename,
+      data_url: await blobToDataUrl(blob),
+      file_types: fileTypes,
+    });
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+    return Boolean(result?.saved);
+  }
+
+  downloadBlob(blob, filename);
+  return true;
 }
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -176,49 +224,27 @@ function buildPdfFromJpeg(jpegDataUrl: string, imageWidth: number, imageHeight: 
   return new Blob(chunks.map(bytesToArrayBuffer), { type: "application/pdf" });
 }
 
-async function captureSlipCanvas(element: HTMLElement): Promise<HTMLCanvasElement> {
-  const width = Math.ceil(element.scrollWidth);
-  const height = Math.ceil(element.scrollHeight);
-  const clone = element.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll("img").forEach((image) => {
-    const src = image.getAttribute("src");
-    if (src && !src.startsWith("data:") && !src.startsWith("http")) {
-      image.setAttribute("src", new URL(src, window.location.origin).href);
-    }
+function waitForImage(image: HTMLImageElement): Promise<void> {
+  if (image.complete) return Promise.resolve();
+  return new Promise((resolve) => {
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
   });
-  const markup = new XMLSerializer().serializeToString(clone);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-      <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml">
-          <style>${slipStyles}</style>
-          ${markup}
-        </div>
-      </foreignObject>
-    </svg>
-  `;
-  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+}
 
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = url;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = width * window.devicePixelRatio;
-    canvas.height = height * window.devicePixelRatio;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas context unavailable");
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, width, height);
-    ctx.drawImage(image, 0, 0, width, height);
-    return canvas;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+async function captureDomSlipCanvas(element: HTMLElement): Promise<HTMLCanvasElement> {
+  await document.fonts?.ready;
+  await Promise.all(Array.from(element.querySelectorAll("img")).map(waitForImage));
+  return html2canvas(element, {
+    backgroundColor: "#fff",
+    scale: Math.min(window.devicePixelRatio || 2, 3),
+    useCORS: true,
+    allowTaint: false,
+    logging: false,
+    imageTimeout: 8000,
+    scrollX: 0,
+    scrollY: 0,
+  });
 }
 
 const slipStyles = `
@@ -363,7 +389,7 @@ export default function Orders() {
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemRow[]>([newItemRow()]);
 
-  const fetchOrders = async (params: SalesOrderListParams = filters) => {
+  const fetchOrders = useCallback(async (params: SalesOrderListParams = filters) => {
     setLoading(true);
     try {
       const { data } = await ordersApi.list(params);
@@ -371,11 +397,11 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
   useEffect(() => {
-    if (view === "list") fetchOrders();
-  }, [view, filters]);
+    if (view === "list") void fetchOrders();
+  }, [view, fetchOrders]);
 
   useEffect(() => {
     Promise.all([customersApi.list(), productsApi.list()]).then(([customerRes, productRes]) => {
@@ -494,30 +520,37 @@ export default function Orders() {
   };
 
   const handleExportImage = async () => {
-    if (!printRef.current || !currentOrder) return;
+    if (!currentOrder || !printRef.current) return;
     try {
-      const canvas = await captureSlipCanvas(printRef.current);
+      const canvas = await captureDomSlipCanvas(printRef.current);
       const dataUrl = canvas.toDataURL("image/png");
       const bytes = dataUrlToBytes(dataUrl);
-      downloadBlob(
+      const saved = await saveExportBlob(
         new Blob([bytesToArrayBuffer(bytes)], { type: "image/png" }),
         `${safeFilename(currentOrder.order_number || "销售单")}.png`,
+        ["PNG Files (*.png)"],
       );
+      if (saved) message.success("图片已导出");
     } catch {
       message.error("导出图片失败，请确认销售单图片可以正常显示");
     }
   };
 
   const handleExportPdf = async () => {
-    if (!printRef.current || !currentOrder) return;
+    if (!currentOrder || !printRef.current) return;
     try {
-      const canvas = await captureSlipCanvas(printRef.current);
+      const canvas = await captureDomSlipCanvas(printRef.current);
       const pdf = buildPdfFromJpeg(
         canvas.toDataURL("image/jpeg", 0.92),
         canvas.width,
         canvas.height,
       );
-      downloadBlob(pdf, `${safeFilename(currentOrder.order_number || "销售单")}.pdf`);
+      const saved = await saveExportBlob(
+        pdf,
+        `${safeFilename(currentOrder.order_number || "销售单")}.pdf`,
+        ["PDF Files (*.pdf)"],
+      );
+      if (saved) message.success("PDF 已导出");
     } catch {
       message.error("导出 PDF 失败，请确认销售单图片可以正常显示");
     }
@@ -744,18 +777,6 @@ export default function Orders() {
                 title: "图片", dataIndex: "image", width: 110,
                 render: (_, record) => (
                   <Space direction="vertical" size={6}>
-                    <Upload
-                      accept="image/*"
-                      showUploadList={false}
-                      beforeUpload={(file) => {
-                        const reader = new FileReader();
-                        reader.onload = () => updateItem(record.key, "image", String(reader.result || ""));
-                        reader.readAsDataURL(file);
-                        return false;
-                      }}
-                    >
-                      <Button size="small" icon={<UploadOutlined />}>选图</Button>
-                    </Upload>
                     {record.image ? (
                       <>
                         <img
@@ -767,7 +788,9 @@ export default function Orders() {
                           移除
                         </Button>
                       </>
-                    ) : null}
+                    ) : (
+                      <Typography.Text type="secondary">选择产品后显示</Typography.Text>
+                    )}
                   </Space>
                 ),
               },
@@ -943,7 +966,8 @@ export default function Orders() {
 
         {/* 合同金额 */}
         <div className="slip-amount-row">
-          合同金额：{orderTotal.toFixed(2)}　　产品合计：{orderTotal.toFixed(2)}
+          合同金额：{orderTotal.toFixed(2)}
+          <span style={{ marginLeft: 24 }}>产品合计：{orderTotal.toFixed(2)}</span>
         </div>
 
         {/* 付款方式 */}
@@ -964,7 +988,10 @@ export default function Orders() {
         <table className="slip-footer-info">
           <tbody>
             <tr>
-              <td>订货电话：18989438186　　QQ：1015352162</td>
+              <td>
+                订货电话：18989438186
+                <span style={{ marginLeft: 24 }}>QQ：1015352162</span>
+              </td>
               <td className="slip-sign-cell">制单人：</td>
             </tr>
             <tr>
