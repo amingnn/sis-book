@@ -18,11 +18,13 @@ __pycache__/
 
 # Node
 node_modules/
+.pnpm-store/
 
 # Build artifacts
 frontend/dist/
 backend/build/
 backend/dist/
+backend/data/
 dist/
 
 # Env

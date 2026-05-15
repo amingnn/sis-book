@@ -1,82 +1,88 @@
 from sqlalchemy import create_engine, inspect, text
 
-from app import migrations
+from app import database
+
+
+BASELINE_REVISION = "20260514_0001"
 
 
 def _column_names(conn, table_name: str) -> set[str]:
     return {column["name"] for column in inspect(conn).get_columns(table_name)}
 
 
-def test_run_migrations_adds_missing_columns_backfills_data_and_records_versions(monkeypatch, tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'migrations.db'}")
-    monkeypatch.setattr(migrations, "store_order_item_image", lambda *args: "img/migrated.png")
+def _create_legacy_order_tables(conn) -> None:
+    conn.execute(
+        text(
+            """
+            CREATE TABLE salesorder (
+                id INTEGER PRIMARY KEY,
+                order_number TEXT,
+                product_image TEXT
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE TABLE salesorderitem (
+                id INTEGER PRIMARY KEY,
+                sales_order_id INTEGER NOT NULL,
+                product_name TEXT,
+                total_boxes INTEGER NOT NULL DEFAULT 0,
+                per_box_qty INTEGER NOT NULL DEFAULT 0,
+                unit_price NUMERIC NOT NULL DEFAULT 0,
+                color_spec TEXT NOT NULL DEFAULT '',
+                box_size TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE TABLE salesrecord (
+                id INTEGER PRIMARY KEY,
+                sale_time DATE,
+                customer_name TEXT,
+                product TEXT,
+                amount NUMERIC NOT NULL DEFAULT 0,
+                delivery_time DATE,
+                is_settled BOOLEAN NOT NULL DEFAULT 0,
+                payment_method TEXT NOT NULL DEFAULT '',
+                cost NUMERIC NOT NULL DEFAULT 0,
+                notes TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE TABLE purchaseorder (
+                id INTEGER PRIMARY KEY,
+                purchase_time DATE,
+                supplier_name TEXT,
+                product_name TEXT,
+                box_count INTEGER NOT NULL DEFAULT 0,
+                per_box_qty INTEGER NOT NULL DEFAULT 0,
+                unit_price NUMERIC NOT NULL DEFAULT 0,
+                notes TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+    )
 
+
+def test_alembic_baseline_migrates_legacy_schema_and_backfills_data(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
     with engine.begin() as conn:
+        _create_legacy_order_tables(conn)
         conn.execute(
             text(
-                """
-                CREATE TABLE salesorder (
-                    id INTEGER PRIMARY KEY,
-                    order_number TEXT,
-                    product_image TEXT
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                CREATE TABLE salesorderitem (
-                    id INTEGER PRIMARY KEY,
-                    sales_order_id INTEGER NOT NULL,
-                    product_name TEXT,
-                    total_boxes INTEGER NOT NULL DEFAULT 0,
-                    per_box_qty INTEGER NOT NULL DEFAULT 0,
-                    unit_price NUMERIC NOT NULL DEFAULT 0,
-                    color_spec TEXT NOT NULL DEFAULT '',
-                    box_size TEXT NOT NULL DEFAULT '',
-                    notes TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                CREATE TABLE salesrecord (
-                    id INTEGER PRIMARY KEY,
-                    sale_time DATE,
-                    customer_name TEXT,
-                    product TEXT,
-                    amount NUMERIC NOT NULL DEFAULT 0,
-                    delivery_time DATE,
-                    is_settled BOOLEAN NOT NULL DEFAULT 0,
-                    payment_method TEXT NOT NULL DEFAULT '',
-                    cost NUMERIC NOT NULL DEFAULT 0,
-                    notes TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                CREATE TABLE purchaseorder (
-                    id INTEGER PRIMARY KEY,
-                    purchase_time DATE,
-                    supplier_name TEXT,
-                    product_name TEXT,
-                    box_count INTEGER NOT NULL DEFAULT 0,
-                    per_box_qty INTEGER NOT NULL DEFAULT 0,
-                    unit_price NUMERIC NOT NULL DEFAULT 0,
-                    notes TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                "INSERT INTO salesorder(id, order_number, product_image) VALUES (1, 'MC20260420001', 'data:image/png;base64,abc')"
+                "INSERT INTO salesorder(id, order_number, product_image) "
+                "VALUES (1, 'MC20260420001', 'img/legacy-product.jpg')"
             )
         )
         conn.execute(
@@ -112,16 +118,20 @@ def test_run_migrations_adds_missing_columns_backfills_data_and_records_versions
             )
         )
 
-    migrations.run_migrations(engine)
+    database.run_alembic_migrations(engine)
 
     with engine.begin() as conn:
+        inspector = inspect(conn)
+        assert inspector.has_table("customer")
+        assert inspector.has_table("supplier")
+        assert inspector.has_table("product")
+        assert inspector.has_table("task")
         assert "image" in _column_names(conn, "salesorderitem")
         assert "collection_time" in _column_names(conn, "salesrecord")
         assert "paid_amount" in _column_names(conn, "purchaseorder")
-        assert inspect(conn).has_table("task")
-        assert inspect(conn).has_table("supplier")
-        assert inspect(conn).has_table("product")
-        assert conn.execute(text("SELECT image FROM salesorderitem WHERE id = 10")).scalar_one() == "img/migrated.png"
+        assert "supplier_name" not in _column_names(conn, "product")
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == BASELINE_REVISION
+        assert conn.execute(text("SELECT image FROM salesorderitem WHERE id = 10")).scalar_one() == "img/legacy-product.jpg"
         assert conn.execute(text("SELECT name FROM supplier")).scalar_one() == "胜利厂家"
         product = conn.execute(
             text(
@@ -132,96 +142,22 @@ def test_run_migrations_adds_missing_columns_backfills_data_and_records_versions
                 """
             )
         ).one()
-        assert product == ("img/migrated.png", 12, "60*40*30", 2.5, 36)
-        assert "supplier_name" not in _column_names(conn, "product")
-        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 7
+        assert product == ("img/legacy-product.jpg", 12, "60*40*30", 2.5, 36)
 
 
-def test_run_migrations_is_idempotent(monkeypatch, tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'migrations-idempotent.db'}")
-    monkeypatch.setattr(migrations, "store_order_item_image", lambda *args: "img/migrated.png")
+def test_alembic_migrations_are_idempotent(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'idempotent.db'}")
 
-    with engine.begin() as conn:
-        conn.execute(text("CREATE TABLE salesorder (id INTEGER PRIMARY KEY, order_number TEXT, product_image TEXT)"))
-        conn.execute(
-            text(
-                """
-                CREATE TABLE salesorderitem (
-                    id INTEGER PRIMARY KEY,
-                    sales_order_id INTEGER NOT NULL,
-                    product_name TEXT,
-                    total_boxes INTEGER NOT NULL DEFAULT 0,
-                    per_box_qty INTEGER NOT NULL DEFAULT 0,
-                    unit_price NUMERIC NOT NULL DEFAULT 0,
-                    color_spec TEXT NOT NULL DEFAULT '',
-                    box_size TEXT NOT NULL DEFAULT '',
-                    notes TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                CREATE TABLE salesrecord (
-                    id INTEGER PRIMARY KEY,
-                    sale_time DATE,
-                    customer_name TEXT,
-                    product TEXT,
-                    amount NUMERIC NOT NULL DEFAULT 0,
-                    delivery_time DATE,
-                    is_settled BOOLEAN NOT NULL DEFAULT 0,
-                    payment_method TEXT NOT NULL DEFAULT '',
-                    cost NUMERIC NOT NULL DEFAULT 0,
-                    notes TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                CREATE TABLE purchaseorder (
-                    id INTEGER PRIMARY KEY,
-                    purchase_time DATE,
-                    supplier_name TEXT,
-                    product_name TEXT,
-                    box_count INTEGER NOT NULL DEFAULT 0,
-                    per_box_qty INTEGER NOT NULL DEFAULT 0,
-                    unit_price NUMERIC NOT NULL DEFAULT 0,
-                    notes TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-        )
-
-    migrations.run_migrations(engine)
-    migrations.run_migrations(engine)
+    database.run_alembic_migrations(engine)
+    database.run_alembic_migrations(engine)
 
     with engine.begin() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 7
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == BASELINE_REVISION
 
 
-def test_run_migrations_drops_product_supplier_name_destructively(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'migrations-drop-product-supplier.db'}")
-
+def test_alembic_baseline_drops_product_supplier_name_destructively(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'drop-product-supplier.db'}")
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE schema_migrations (
-                    version INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-        )
-        for version in range(1, 7):
-            conn.execute(
-                text("INSERT INTO schema_migrations(version, name) VALUES (:version, :name)"),
-                {"version": version, "name": f"migration_{version}"},
-            )
         conn.execute(
             text(
                 """
@@ -257,12 +193,12 @@ def test_run_migrations_drops_product_supplier_name_destructively(tmp_path):
                     stock_qty,
                     notes
                 )
-                VALUES (1, '羽毛球', 'img/product.png', '胜利厂家', 12, '60*40*30', 0.072, 2.5, 120, '热销')
+                VALUES (1, '羽毛球', 'img/product.jpg', '胜利厂家', 12, '60*40*30', 0.072, 2.5, 120, '热销')
                 """
             )
         )
 
-    migrations.run_migrations(engine)
+    database.run_alembic_migrations(engine)
 
     with engine.begin() as conn:
         assert "supplier_name" not in _column_names(conn, "product")
@@ -275,5 +211,5 @@ def test_run_migrations_drops_product_supplier_name_destructively(tmp_path):
                 """
             )
         ).one()
-        assert product == ("羽毛球", "img/product.png", 12, "60*40*30", 0.072, 2.5, 120, "热销")
-        assert conn.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 7
+        assert product == ("羽毛球", "img/product.jpg", 12, "60*40*30", 0.072, 2.5, 120, "热销")
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == BASELINE_REVISION

@@ -1,9 +1,9 @@
 import json
 import time
 
-from app.config import get_data_dir
+from app.config import DATA_DIR
 
-LOG_FILE = get_data_dir() / "debug.log"
+LOG_FILE = DATA_DIR / "debug.log"
 
 
 def log(message: str) -> None:

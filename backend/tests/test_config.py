@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 
 import pytest
@@ -6,61 +5,30 @@ import pytest
 from app import config
 
 
-@pytest.mark.parametrize(
-    ("platform", "home_subpath", "expected_base_suffix"),
-    [
-        pytest.param(
-            "win32",
-            Path("Users") / "testuser",
-            Path("AppData") / "Local",
-            id="windows-standard-home",
-        ),
-        pytest.param(
-            "darwin",
-            Path("Users") / "macuser",
-            Path("Library") / "Application Support",
-            id="macos-standard-home",
-        ),
-        pytest.param(
-            "linux",
-            Path("home") / "linuxuser",
-            Path(".local") / "share",
-            id="linux-standard-home",
-        ),
-        pytest.param(
-            "freebsd",
-            Path("home") / "bsduser",
-            Path(".local") / "share",
-            id="unknown-posix-platform",
-        ),
-    ],
-)
-def test_get_data_dir_returns_expected_path(
-    monkeypatch,
-    tmp_path,
-    platform,
-    home_subpath,
-    expected_base_suffix,
-):
-    fake_home = tmp_path / home_subpath
-    fake_home.mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setattr(sys, "platform", platform, raising=False)
-    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+def test_get_data_dir_uses_env_path(monkeypatch, tmp_path):
+    custom_dir = tmp_path / "custom-data"
+    monkeypatch.setenv("SIS_BOOK_DATA", str(custom_dir))
 
     data_dir = config.get_data_dir()
 
-    assert data_dir == fake_home / expected_base_suffix / config.APP_NAME
+    assert data_dir == custom_dir
     assert data_dir.is_dir()
 
 
-@pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
-def test_get_data_dir_is_idempotent(monkeypatch, tmp_path, platform):
-    fake_home = tmp_path / "userhome"
-    fake_home.mkdir(parents=True, exist_ok=True)
+def test_get_data_dir_uses_platform_default(monkeypatch, tmp_path):
+    default_dir = tmp_path / "platform-data"
+    monkeypatch.delenv("SIS_BOOK_DATA", raising=False)
+    monkeypatch.setattr(config, "user_data_dir", lambda app_name: str(default_dir / app_name))
 
-    monkeypatch.setattr(sys, "platform", platform, raising=False)
-    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    data_dir = config.get_data_dir("demo-book")
+
+    assert data_dir == default_dir / "demo-book"
+    assert data_dir.is_dir()
+
+
+def test_get_data_dir_is_idempotent(monkeypatch, tmp_path):
+    custom_dir = tmp_path / "idempotent"
+    monkeypatch.setenv("SIS_BOOK_DATA", str(custom_dir))
 
     first_dir = config.get_data_dir()
     second_dir = config.get_data_dir()
@@ -69,13 +37,9 @@ def test_get_data_dir_is_idempotent(monkeypatch, tmp_path, platform):
     assert second_dir.is_dir()
 
 
-@pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
-def test_get_data_dir_raises_when_mkdir_fails(monkeypatch, tmp_path, platform):
-    fake_home = tmp_path / "home"
-    fake_home.mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setattr(sys, "platform", platform, raising=False)
-    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+def test_get_data_dir_raises_when_mkdir_fails(monkeypatch, tmp_path):
+    custom_dir = tmp_path / "blocked"
+    monkeypatch.setenv("SIS_BOOK_DATA", str(custom_dir))
 
     def failing_mkdir(self, *args, **kwargs):
         raise PermissionError("no permission to create directory")
@@ -86,13 +50,10 @@ def test_get_data_dir_raises_when_mkdir_fails(monkeypatch, tmp_path, platform):
         config.get_data_dir()
 
 
-@pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
-def test_get_data_dir_raises_when_home_is_file(monkeypatch, tmp_path, platform):
-    fake_home = tmp_path / "homefile"
-    fake_home.write_text("not a directory")
+def test_get_data_dir_raises_when_target_is_file(monkeypatch, tmp_path):
+    data_file = tmp_path / "data-file"
+    data_file.write_text("not a directory")
+    monkeypatch.setenv("SIS_BOOK_DATA", str(data_file))
 
-    monkeypatch.setattr(sys, "platform", platform, raising=False)
-    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
-
-    with pytest.raises(NotADirectoryError):
+    with pytest.raises(FileExistsError):
         config.get_data_dir()
