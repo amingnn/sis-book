@@ -1,7 +1,8 @@
 from sqlmodel import Session, col, select
 
-from app.common.crud import create_entity, delete_entity, get_entity, update_entity
+from app.common.crud import delete_entity, get_entity, update_entity
 from app.common.query import apply_fuzzy_search
+from app.product.images import store_product_image
 from app.product.models import Product, ProductCreate, ProductUpdate
 
 
@@ -16,7 +17,13 @@ def get_product(session: Session, product_id: int) -> Product | None:
 
 
 def create_product(session: Session, data: ProductCreate) -> Product:
-    return create_entity(session, Product, data)
+    payload = data.model_dump()
+    payload["image"] = store_product_image(payload.get("image", ""), payload["name"])
+    product = Product.model_validate(payload)
+    session.add(product)
+    session.commit()
+    session.refresh(product)
+    return product
 
 
 def update_product(session: Session, product_id: int, data: ProductUpdate) -> Product | None:
@@ -24,7 +31,13 @@ def update_product(session: Session, product_id: int, data: ProductUpdate) -> Pr
     if not product:
         return None
 
-    return update_entity(session, product, data)
+    payload = data.model_dump(exclude_unset=True, exclude_none=True)
+    if "image" in payload:
+        payload["image"] = store_product_image(
+            payload.get("image", ""),
+            payload.get("name") or product.name,
+        )
+    return update_entity(session, product, ProductUpdate(**payload))
 
 
 def delete_product(session: Session, product_id: int) -> bool:

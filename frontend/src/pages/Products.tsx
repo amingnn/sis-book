@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button, Card, Form, Image, Input, InputNumber, message, Space, Table, Upload } from "antd";
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -15,6 +15,34 @@ function resolveImageSrc(image?: string): string {
   return image.startsWith("/") ? image : `/${image}`;
 }
 
+function fileToJpegDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = document.createElement("img");
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        URL.revokeObjectURL(url);
+        reject(new Error("canvas unavailable"));
+        return;
+      }
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.92));
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image load failed"));
+    };
+    image.src = url;
+  });
+}
+
 export default function Products() {
   const [view, setView] = useState<View>("list");
   const [data, setData] = useState<Product[]>([]);
@@ -24,7 +52,7 @@ export default function Products() {
   const [form] = Form.useForm<ProductForm>();
   const image = Form.useWatch("image", form);
 
-  const fetchData = async (q = query) => {
+  const fetchData = useCallback(async (q: string) => {
     setLoading(true);
     try {
       const res = await productsApi.list(q ? { q } : undefined);
@@ -32,11 +60,11 @@ export default function Products() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData("");
-  }, []);
+    void fetchData("");
+  }, [fetchData]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -66,13 +94,13 @@ export default function Products() {
       message.success("产品已新增");
     }
     setView("list");
-    fetchData();
+    void fetchData(query);
   };
 
   const handleDelete = async (id: number) => {
     await productsApi.delete(id);
     message.success("产品已删除");
-    fetchData();
+    void fetchData(query);
   };
 
   const columns: ColumnsType<Product> = [
@@ -149,9 +177,9 @@ export default function Products() {
                   accept="image/*"
                   showUploadList={false}
                   beforeUpload={(file) => {
-                    const reader = new FileReader();
-                    reader.onload = () => form.setFieldValue("image", String(reader.result || ""));
-                    reader.readAsDataURL(file);
+                    fileToJpegDataUrl(file)
+                      .then((dataUrl) => form.setFieldValue("image", dataUrl))
+                      .catch(() => message.error("图片读取失败"));
                     return false;
                   }}
                 >
