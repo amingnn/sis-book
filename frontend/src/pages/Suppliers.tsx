@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button, Card, Form, Input, message, Table } from "antd";
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -17,7 +17,7 @@ export default function Suppliers() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm<SupplierForm>();
 
-  const fetchData = async (q = query) => {
+  const fetchData = useCallback(async (q: string) => {
     setLoading(true);
     try {
       const res = await suppliersApi.list(q ? { q } : undefined);
@@ -25,11 +25,11 @@ export default function Suppliers() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData("");
-  }, []);
+    void fetchData("");
+  }, [fetchData]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -53,13 +53,13 @@ export default function Suppliers() {
       message.success("厂家已新增");
     }
     setView("list");
-    fetchData();
+    void fetchData(query);
   };
 
   const handleDelete = async (id: number) => {
     await suppliersApi.delete(id);
     message.success("厂家已删除");
-    fetchData();
+    void fetchData(query);
   };
 
   const columns: ColumnsType<Supplier> = [

@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, Col, Row, Spin, Typography } from "antd";
-import dayjs from "dayjs";
+import { Card, Col, Row, Segmented, Space, Spin, Typography } from "antd";
+import dayjs, { type Dayjs } from "dayjs";
 
 import { purchasesApi, type PurchaseOrder } from "../api/purchases";
 import { salesApi, type SalesRecord } from "../api/sales";
 
+type RangeMode = "day" | "week" | "year";
+
 interface ChartPoint {
   label: string;
   value: number;
+}
+
+interface TimeBucket {
+  label: string;
+  start: Dayjs;
+  end: Dayjs;
 }
 
 function formatCurrency(value: number): string {
@@ -15,9 +23,51 @@ function formatCurrency(value: number): string {
   return `¥${value.toFixed(0)}`;
 }
 
-function getLastMonths(count: number) {
+function buildBuckets(mode: RangeMode): TimeBucket[] {
   const now = dayjs();
-  return Array.from({ length: count }, (_, index) => now.subtract(count - index - 1, "month"));
+  if (mode === "day") {
+    return Array.from({ length: 14 }, (_, index) => {
+      const day = now.subtract(13 - index, "day");
+      return {
+        label: day.format("MM/DD"),
+        start: day.startOf("day"),
+        end: day.endOf("day"),
+      };
+    });
+  }
+
+  if (mode === "week") {
+    return Array.from({ length: 12 }, (_, index) => {
+      const end = now.subtract((11 - index) * 7, "day").endOf("day");
+      const start = end.subtract(6, "day").startOf("day");
+      return {
+        label: start.format("MM/DD"),
+        start,
+        end,
+      };
+    });
+  }
+
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = now.subtract(11 - index, "month");
+    return {
+      label: month.format("YY/MM"),
+      start: month.startOf("month"),
+      end: month.endOf("month"),
+    };
+  });
+}
+
+function inBucket(value: string | null | undefined, bucket: TimeBucket): boolean {
+  if (!value) return false;
+  const current = dayjs(value);
+  return !current.isBefore(bucket.start) && !current.isAfter(bucket.end);
+}
+
+function inRange(value: string | null | undefined, buckets: TimeBucket[]): boolean {
+  if (!value || buckets.length === 0) return false;
+  const current = dayjs(value);
+  return !current.isBefore(buckets[0].start) && !current.isAfter(buckets[buckets.length - 1].end);
 }
 
 function LineChart({
@@ -124,6 +174,7 @@ function BarChart({
 
 export default function DataOverview() {
   const [loading, setLoading] = useState(true);
+  const [rangeMode, setRangeMode] = useState<RangeMode>("day");
   const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
 
@@ -136,43 +187,53 @@ export default function DataOverview() {
       .finally(() => setLoading(false));
   }, []);
 
-  const months = useMemo(() => getLastMonths(12), []);
+  const buckets = useMemo(() => buildBuckets(rangeMode), [rangeMode]);
 
-  const monthlySales = useMemo(
+  const filteredSales = useMemo(
+    () => salesRecords.filter((record) => inRange(record.sale_time, buckets)),
+    [buckets, salesRecords],
+  );
+
+  const filteredPurchases = useMemo(
+    () => purchases.filter((record) => inRange(record.purchase_time, buckets)),
+    [buckets, purchases],
+  );
+
+  const salesTrend = useMemo(
     () =>
-      months.map((month) => ({
-        label: month.format("MM月"),
+      buckets.map((bucket) => ({
+        label: bucket.label,
         value: salesRecords
-          .filter((record) => dayjs(record.sale_time).format("YYYY-MM") === month.format("YYYY-MM"))
+          .filter((record) => inBucket(record.sale_time, bucket))
           .reduce((sum, record) => sum + Number(record.amount), 0),
       })),
-    [months, salesRecords],
+    [buckets, salesRecords],
   );
 
-  const monthlyProfit = useMemo(
+  const profitTrend = useMemo(
     () =>
-      months.map((month) => ({
-        label: month.format("MM月"),
+      buckets.map((bucket) => ({
+        label: bucket.label,
         value: salesRecords
-          .filter((record) => dayjs(record.sale_time).format("YYYY-MM") === month.format("YYYY-MM"))
+          .filter((record) => inBucket(record.sale_time, bucket))
           .reduce((sum, record) => sum + Number(record.gross_profit), 0),
       })),
-    [months, salesRecords],
+    [buckets, salesRecords],
   );
 
-  const monthlyPurchases = useMemo(
+  const purchaseTrend = useMemo(
     () =>
-      months.map((month) => ({
-        label: month.format("MM月"),
+      buckets.map((bucket) => ({
+        label: bucket.label,
         value: purchases
-          .filter((record) => dayjs(record.purchase_time).format("YYYY-MM") === month.format("YYYY-MM"))
+          .filter((record) => inBucket(record.purchase_time, bucket))
           .reduce((sum, record) => sum + Number(record.total_amount), 0),
       })),
-    [months, purchases],
+    [buckets, purchases],
   );
 
   const productDistribution = useMemo(() => {
-    const grouped = salesRecords.reduce<Record<string, number>>((acc, record) => {
+    const grouped = filteredSales.reduce<Record<string, number>>((acc, record) => {
       acc[record.product] = (acc[record.product] ?? 0) + Number(record.amount);
       return acc;
     }, {});
@@ -180,23 +241,29 @@ export default function DataOverview() {
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 8);
-  }, [salesRecords]);
+  }, [filteredSales]);
 
-  const settlementDistribution = useMemo(() => {
-    const due = salesRecords.filter(
-      (record) =>
-        !record.is_settled &&
-        record.collection_time &&
-        dayjs(record.collection_time).isBefore(dayjs().add(1, "day"), "day"),
-    ).length;
-    const settled = salesRecords.filter((record) => record.is_settled).length;
-    const unsettled = salesRecords.length - settled - due;
-    return [
-      { label: "到期/超时", value: due },
-      { label: "未结清", value: Math.max(0, unsettled) },
-      { label: "已结清", value: settled },
-    ];
-  }, [salesRecords]);
+  const customerDistribution = useMemo(() => {
+    const grouped = filteredSales.reduce<Record<string, number>>((acc, record) => {
+      acc[record.customer_name] = (acc[record.customer_name] ?? 0) + Number(record.amount);
+      return acc;
+    }, {});
+    return Object.entries(grouped)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [filteredSales]);
+
+  const purchaseProductDistribution = useMemo(() => {
+    const grouped = filteredPurchases.reduce<Record<string, number>>((acc, record) => {
+      acc[record.product_name] = (acc[record.product_name] ?? 0) + Number(record.total_amount);
+      return acc;
+    }, {});
+    return Object.entries(grouped)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [filteredPurchases]);
 
   if (loading) {
     return (
@@ -208,28 +275,37 @@ export default function DataOverview() {
 
   return (
     <div>
-      <Typography.Title level={4}>数据总览</Typography.Title>
+      <Space style={{ width: "100%", justifyContent: "space-between", marginBottom: 16 }} wrap>
+        <Typography.Title level={4} style={{ margin: 0 }}>数据总览</Typography.Title>
+        <Segmented
+          value={rangeMode}
+          onChange={(value) => setRangeMode(value as RangeMode)}
+          options={[
+            { label: "日", value: "day" },
+            { label: "周", value: "week" },
+            { label: "年", value: "year" },
+          ]}
+        />
+      </Space>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24}>
-          <LineChart title="销售额趋势" data={monthlySales} color="#1677ff" />
+        <Col xs={24} xl={12}>
+          <LineChart title="销售额趋势" data={salesTrend} color="#1677ff" />
         </Col>
-        <Col xs={24}>
-          <LineChart title="毛利润趋势" data={monthlyProfit} color="#52c41a" />
+        <Col xs={24} xl={12}>
+          <LineChart title="毛利润趋势" data={profitTrend} color="#52c41a" />
         </Col>
-        <Col xs={24}>
-          <BarChart title="采购金额分布" data={monthlyPurchases} color="#fa8c16" />
+        <Col xs={24} xl={12}>
+          <BarChart title="采购金额趋势" data={purchaseTrend} color="#fa8c16" />
         </Col>
         <Col xs={24} xl={12}>
           <BarChart title="产品销售分布" data={productDistribution} color="#722ed1" />
         </Col>
         <Col xs={24} xl={12}>
-          <BarChart
-            title="收款状态分布"
-            data={settlementDistribution}
-            color="#13c2c2"
-            formatValue={(value) => `${Math.round(value)}`}
-          />
+          <BarChart title="客户销售分布" data={customerDistribution} color="#13c2c2" />
+        </Col>
+        <Col xs={24} xl={12}>
+          <BarChart title="采购产品分布" data={purchaseProductDistribution} color="#eb2f96" />
         </Col>
       </Row>
     </div>

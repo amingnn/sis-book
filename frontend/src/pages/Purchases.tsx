@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Button,
   Card,
@@ -49,7 +49,7 @@ export default function Purchases() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
-  const buildFilters = () => {
+  const buildFilters = useCallback(() => {
     const params: Record<string, unknown> = {};
     if (query) params.q = query;
     if (supplierName) params.supplier_name = supplierName;
@@ -57,9 +57,9 @@ export default function Purchases() {
     if (dateRange?.[0]) params.start_date = dateRange[0].format("YYYY-MM-DD");
     if (dateRange?.[1]) params.end_date = dateRange[1].format("YYYY-MM-DD");
     return params;
-  };
+  }, [dateRange, productName, query, supplierName]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const listRes = await purchasesApi.list(buildFilters());
@@ -67,11 +67,11 @@ export default function Purchases() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildFilters]);
 
   useEffect(() => {
-    fetchData();
-  }, [query, supplierName, productName, dateRange]);
+    void fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     Promise.all([suppliersApi.list(), productsApi.list()]).then(([supplierRes, productRes]) => {
@@ -122,13 +122,13 @@ export default function Purchases() {
       message.success("新增成功");
     }
     setView("list");
-    fetchData();
+    void fetchData();
   };
 
   const handleDelete = async (id: number) => {
     await purchasesApi.delete(id);
     message.success("删除成功");
-    fetchData();
+    void fetchData();
   };
 
   const columns: ColumnsType<PurchaseOrder> = [

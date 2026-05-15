@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button, Card, Form, Input, message, Table } from "antd";
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -17,7 +17,7 @@ export default function Customers() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm<CustomerForm>();
 
-  const fetchData = async (q = query) => {
+  const fetchData = useCallback(async (q: string) => {
     setLoading(true);
     try {
       const res = await customersApi.list(q ? { q } : undefined);
@@ -25,11 +25,11 @@ export default function Customers() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData("");
-  }, []);
+    void fetchData("");
+  }, [fetchData]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -53,13 +53,13 @@ export default function Customers() {
       message.success("客户已新增");
     }
     setView("list");
-    fetchData();
+    void fetchData(query);
   };
 
   const handleDelete = async (id: number) => {
     await customersApi.delete(id);
     message.success("客户已删除");
-    fetchData();
+    void fetchData(query);
   };
 
   const columns: ColumnsType<Customer> = [
