@@ -49,6 +49,10 @@ def get_settings() -> dict:
 def save_settings(sync_base_dir: str, enabled: bool, interval_minutes: int) -> dict:
     payload = get_settings()
     normalized_dir = str(_get_sync_root(sync_base_dir.strip())) if sync_base_dir.strip() else ""
+    if enabled and not normalized_dir:
+        raise SyncError("开启同步前请先配置同步目录")
+    if normalized_dir:
+        _get_sync_root(normalized_dir).mkdir(parents=True, exist_ok=True)
     payload.update(
         {
             "sync_base_dir": normalized_dir,

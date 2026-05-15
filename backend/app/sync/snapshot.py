@@ -6,7 +6,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from app.config import APP_NAME, DATABASE_PATH, get_data_dir
+from app.config import APP_NAME, DATABASE_PATH, DATA_DIR
 from app.database import export_database_snapshot, replace_database_from
 from app.sync.errors import SyncError
 from app.sync.files import list_files, mirror_directory
@@ -55,7 +55,7 @@ def write_remote_snapshot(
     sync_root = get_sync_root(base_dir)
     remote_snapshot_dir = get_remote_snapshot_dir(base_dir)
     remote_images_dir = remote_snapshot_dir / "img"
-    temp_dir = Path(tempfile.mkdtemp(prefix="sis-book-sync-", dir=get_data_dir()))
+    temp_dir = Path(tempfile.mkdtemp(prefix="sis-book-sync-", dir=DATA_DIR))
     try:
         temp_db_path = temp_dir / "data.db"
         export_database_snapshot(temp_db_path)

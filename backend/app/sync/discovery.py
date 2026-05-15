@@ -1,4 +1,6 @@
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from app.sync.errors import SyncError
@@ -37,6 +39,21 @@ def detect_onedrive_dirs() -> list[dict]:
 
 
 def choose_sync_dir() -> str:
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", 'POSIX path of (choose folder with prompt "选择目录")'],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip().rstrip("/")
+            return ""
+        except Exception:
+            pass
+
     try:
         import tkinter as tk
         from tkinter import filedialog

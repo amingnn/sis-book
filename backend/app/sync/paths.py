@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from app.config import get_data_dir
+from app.config import DATA_DIR, IMG_DIR
 from app.sync.errors import SyncError
 
 SYNC_DIR_NAME = "sis-book-sync"
-SETTINGS_PATH = get_data_dir() / "sync_settings.json"
-STATE_PATH = get_data_dir() / "sync_state.json"
-IMAGES_DIR = get_data_dir() / "img"
+SETTINGS_PATH = DATA_DIR / "sync_settings.json"
+STATE_PATH = DATA_DIR / "sync_state.json"
+IMAGES_DIR = IMG_DIR
 
 
 def get_sync_root(base_dir: str) -> Path:

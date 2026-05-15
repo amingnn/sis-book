@@ -89,6 +89,18 @@ def test_save_settings_and_get_status_normalize_path(monkeypatch, tmp_path):
     assert status["configured"] is True
 
 
+def test_get_status_does_not_configure_detected_sync_dir_by_default(monkeypatch, tmp_path):
+    monkeypatch.setattr(sync_service, "SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(sync_service, "detect_onedrive_dirs", lambda: [{"path": str(tmp_path / "OneDrive"), "label": "OneDrive"}])
+
+    status = sync_service.get_status()
+
+    assert status["sync_base_dir"] == ""
+    assert status["sync_root"] == ""
+    assert status["configured"] is False
+    assert status["detected_dirs"] == [{"path": str(tmp_path / "OneDrive"), "label": "OneDrive"}]
+
+
 def test_run_sync_push_updates_state_and_settings(monkeypatch, tmp_path):
     writes = []
     monkeypatch.setattr(sync_service, "_sync_lock", threading.Lock())

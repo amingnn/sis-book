@@ -8,10 +8,8 @@ def default_settings(
     detect_dirs: Callable[[], list[dict]],
     get_sync_root: Callable[[str], Path],
 ) -> dict:
-    candidates = detect_dirs()
-    initial_dir = str(get_sync_root(candidates[0]["path"])) if candidates else ""
     return {
-        "sync_base_dir": initial_dir,
+        "sync_base_dir": "",
         "enabled": False,
         "interval_minutes": 30,
         "last_sync_at": "",
