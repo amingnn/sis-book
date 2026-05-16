@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, Col, Row, Segmented, Space, Spin, Typography } from "antd";
+import { Alert, Card, Col, Empty, Row, Segmented, Space, Spin, Statistic, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 
 import { purchasesApi, type PurchaseOrder } from "../api/purchases";
 import { salesApi, type SalesRecord } from "../api/sales";
 
-type RangeMode = "day" | "week" | "year";
-
-interface ChartPoint {
-  label: string;
-  value: number;
-}
+type RangeMode = "week" | "month" | "year";
 
 interface TimeBucket {
   label: string;
@@ -18,16 +13,49 @@ interface TimeBucket {
   end: Dayjs;
 }
 
+interface TrendPoint {
+  label: string;
+  sales: number;
+  profit: number;
+  purchase: number;
+}
+
+interface DistributionPoint {
+  label: string;
+  value: number;
+}
+
+interface LineSeries {
+  label: string;
+  color: string;
+  getValue: (point: TrendPoint) => number;
+}
+
+const chartColors = ["#1677ff", "#fa8c16", "#52c41a", "#eb2f96", "#13c2c2", "#722ed1"];
+
+const currencyFormatter = new Intl.NumberFormat("zh-CN", {
+  style: "currency",
+  currency: "CNY",
+  maximumFractionDigits: 0,
+});
+
 function formatCurrency(value: number): string {
-  if (value >= 10000) return `${(value / 10000).toFixed(1)}万`;
-  return `¥${value.toFixed(0)}`;
+  return currencyFormatter.format(Number(value || 0));
+}
+
+function formatCompactCurrency(value: number): string {
+  const current = Number(value || 0);
+  const sign = current < 0 ? "-" : "";
+  const absoluteValue = Math.abs(current);
+  if (absoluteValue >= 10000) return `${sign}¥${(absoluteValue / 10000).toFixed(1)}万`;
+  return `${sign}¥${absoluteValue.toFixed(0)}`;
 }
 
 function buildBuckets(mode: RangeMode): TimeBucket[] {
   const now = dayjs();
-  if (mode === "day") {
-    return Array.from({ length: 14 }, (_, index) => {
-      const day = now.subtract(13 - index, "day");
+  if (mode === "week") {
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = now.subtract(6 - index, "day");
       return {
         label: day.format("MM/DD"),
         start: day.startOf("day"),
@@ -36,14 +64,13 @@ function buildBuckets(mode: RangeMode): TimeBucket[] {
     });
   }
 
-  if (mode === "week") {
-    return Array.from({ length: 12 }, (_, index) => {
-      const end = now.subtract((11 - index) * 7, "day").endOf("day");
-      const start = end.subtract(6, "day").startOf("day");
+  if (mode === "month") {
+    return Array.from({ length: 30 }, (_, index) => {
+      const day = now.subtract(29 - index, "day");
       return {
-        label: start.format("MM/DD"),
-        start,
-        end,
+        label: day.format("MM/DD"),
+        start: day.startOf("day"),
+        end: day.endOf("day"),
       };
     });
   }
@@ -70,111 +97,196 @@ function inRange(value: string | null | undefined, buckets: TimeBucket[]): boole
   return !current.isBefore(buckets[0].start) && !current.isAfter(buckets[buckets.length - 1].end);
 }
 
-function LineChart({
-  title,
-  data,
-  color = "#1677ff",
-}: {
-  title: string;
-  data: ChartPoint[];
-  color?: string;
-}) {
-  const width = 760;
-  const height = 280;
-  const padding = { top: 26, right: 28, bottom: 46, left: 58 };
+function groupDistribution(
+  records: Array<{ label: string; value: number }>,
+  limit = 5,
+): DistributionPoint[] {
+  const grouped = records.reduce<Record<string, number>>((acc, record) => {
+    if (record.value <= 0) return acc;
+    acc[record.label] = (acc[record.label] ?? 0) + record.value;
+    return acc;
+  }, {});
+  const sorted = Object.entries(grouped)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+  const top = sorted.slice(0, limit);
+  const rest = sorted.slice(limit).reduce((sum, item) => sum + item.value, 0);
+  return rest > 0 ? [...top, { label: "其他", value: rest }] : top;
+}
+
+function polarToCartesian(centerX: number, centerY: number, radius: number, angleInDegrees: number) {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+  return {
+    x: centerX + radius * Math.cos(angleInRadians),
+    y: centerY + radius * Math.sin(angleInRadians),
+  };
+}
+
+function describePieSlice(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+) {
+  const start = polarToCartesian(centerX, centerY, radius, endAngle);
+  const end = polarToCartesian(centerX, centerY, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+  return [
+    `M ${centerX} ${centerY}`,
+    `L ${start.x} ${start.y}`,
+    `A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function TrendLineChart({ data }: { data: TrendPoint[] }) {
+  const width = 960;
+  const height = 320;
+  const padding = { top: 32, right: 34, bottom: 52, left: 70 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
-  const maxValue = Math.max(...data.map((item) => item.value), 1);
-  const points = data.map((item, index) => {
-    const x = padding.left + (data.length === 1 ? 0 : (index / (data.length - 1)) * innerWidth);
-    const y = padding.top + innerHeight - (item.value / maxValue) * innerHeight;
-    return { ...item, x, y };
-  });
-  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const series: LineSeries[] = [
+    { label: "销售额", color: "#1677ff", getValue: (point) => point.sales },
+    { label: "采购额", color: "#fa8c16", getValue: (point) => point.purchase },
+    { label: "毛利", color: "#52c41a", getValue: (point) => point.profit },
+  ];
+  const maxValue = Math.max(...data.flatMap((point) => series.map((item) => Math.max(item.getValue(point), 0))), 1);
+
+  const buildPoints = (line: LineSeries) =>
+    data.map((point, index) => {
+      const x = padding.left + (data.length === 1 ? innerWidth / 2 : (index / (data.length - 1)) * innerWidth);
+      const y = padding.top + innerHeight - (Math.max(line.getValue(point), 0) / maxValue) * innerHeight;
+      return { label: point.label, value: line.getValue(point), x, y };
+    });
 
   return (
-    <Card title={title}>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img">
+    <Card
+      title="经营趋势"
+      extra={
+        <div className="data-overview-legend">
+          {series.map((line) => (
+            <span key={line.label}>
+              <i style={{ background: line.color }} />
+              {line.label}
+            </span>
+          ))}
+        </div>
+      }
+      className="data-overview-card"
+    >
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="经营趋势折线图">
+        <title>经营趋势折线图</title>
         {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
           const y = padding.top + innerHeight - ratio * innerHeight;
           return (
             <g key={ratio}>
-              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#f0f0f0" />
-              <text x={padding.left - 10} y={y + 4} textAnchor="end" fontSize={11} fill="#8c8c8c">
-                {formatCurrency(maxValue * ratio)}
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#edf2f7" />
+              <text x={padding.left - 10} y={y + 4} textAnchor="end" fontSize={11} fill="#6b7280">
+                {formatCompactCurrency(maxValue * ratio)}
               </text>
             </g>
           );
         })}
-        <path d={path} fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-        {points.map((point) => (
-          <g key={point.label}>
-            <circle cx={point.x} cy={point.y} r={4} fill="#fff" stroke={color} strokeWidth={2} />
-            <text x={point.x} y={height - 20} textAnchor="middle" fontSize={11} fill="#595959">
+        {series.map((line) => {
+          const points = buildPoints(line);
+          const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+          return (
+            <g key={line.label}>
+              <path d={path} fill="none" stroke={line.color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+              {points.map((point) => (
+                <circle key={`${line.label}-${point.label}`} cx={point.x} cy={point.y} r={4} fill="#fff" stroke={line.color} strokeWidth={2} />
+              ))}
+            </g>
+          );
+        })}
+        {data.map((point, index) => {
+          const showLabel = data.length <= 10 || index % 2 === 0 || index === data.length - 1;
+          const x = padding.left + (data.length === 1 ? innerWidth / 2 : (index / (data.length - 1)) * innerWidth);
+          return showLabel ? (
+            <text key={point.label} x={x} y={height - 20} textAnchor="middle" fontSize={11} fill="#595959">
               {point.label}
             </text>
-          </g>
-        ))}
+          ) : null;
+        })}
       </svg>
     </Card>
   );
 }
 
-function BarChart({
-  title,
-  data,
-  color = "#13c2c2",
-  formatValue = formatCurrency,
-}: {
-  title: string;
-  data: ChartPoint[];
-  color?: string;
-  formatValue?: (value: number) => string;
-}) {
-  const width = 760;
-  const height = 280;
-  const padding = { top: 26, right: 24, bottom: 54, left: 58 };
-  const innerWidth = width - padding.left - padding.right;
-  const innerHeight = height - padding.top - padding.bottom;
-  const maxValue = Math.max(...data.map((item) => item.value), 1);
-  const band = innerWidth / Math.max(data.length, 1);
-  const barWidth = Math.max(18, band * 0.56);
+function PieChart({ title, data }: { title: string; data: DistributionPoint[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const slices = data.reduce<
+    Array<{
+      item: DistributionPoint;
+      index: number;
+      startAngle: number;
+      endAngle: number;
+      nextAngle: number;
+    }>
+  >((acc, item, index) => {
+    const startAngle = acc.at(-1)?.nextAngle ?? 0;
+    const angle = total > 0 ? (item.value / total) * 360 : 0;
+    return [
+      ...acc,
+      {
+        item,
+        index,
+        startAngle,
+        endAngle: startAngle + (angle >= 360 ? 359.99 : angle),
+        nextAngle: startAngle + angle,
+      },
+    ];
+  }, []);
 
   return (
-    <Card title={title}>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img">
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-          const y = padding.top + innerHeight - ratio * innerHeight;
-          return (
-            <g key={ratio}>
-              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#f0f0f0" />
-              <text x={padding.left - 10} y={y + 4} textAnchor="end" fontSize={11} fill="#8c8c8c">
-                {formatValue(maxValue * ratio)}
-              </text>
-            </g>
-          );
-        })}
-        {data.map((item, index) => {
-          const valueHeight = (item.value / maxValue) * innerHeight;
-          const x = padding.left + index * band + (band - barWidth) / 2;
-          const y = padding.top + innerHeight - valueHeight;
-          return (
-            <g key={item.label}>
-              <rect x={x} y={y} width={barWidth} height={Math.max(2, valueHeight)} rx={4} fill={color} />
-              <text x={x + barWidth / 2} y={height - 30} textAnchor="middle" fontSize={11} fill="#595959">
-                {item.label.length > 6 ? `${item.label.slice(0, 6)}...` : item.label}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+    <Card title={title} className="data-overview-card">
+      {total <= 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <div className="data-overview-pie-content">
+          <svg viewBox="0 0 240 220" width="100%" height={220} role="img" aria-label={`${title}饼图`}>
+            <title>{`${title}饼图`}</title>
+            {slices.map(({ item, index, startAngle, endAngle }) => {
+              return (
+                <path
+                  key={item.label}
+                  d={describePieSlice(120, 104, 82, startAngle, endAngle)}
+                  fill={chartColors[index % chartColors.length]}
+                  stroke="#fff"
+                  strokeWidth={2}
+                />
+              );
+            })}
+            <circle cx={120} cy={104} r={44} fill="#fff" />
+            <text x={120} y={98} textAnchor="middle" fontSize={12} fill="#6b7280">
+              合计
+            </text>
+            <text x={120} y={120} textAnchor="middle" fontSize={15} fontWeight={700} fill="#111827">
+              {formatCompactCurrency(total)}
+            </text>
+          </svg>
+          <div className="data-overview-pie-legend">
+            {data.map((item, index) => (
+              <div key={item.label} className="data-overview-pie-row">
+                <span className="data-overview-pie-name">
+                  <i style={{ background: chartColors[index % chartColors.length] }} />
+                  {item.label}
+                </span>
+                <span>{((item.value / total) * 100).toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
 
 export default function DataOverview() {
   const [loading, setLoading] = useState(true);
-  const [rangeMode, setRangeMode] = useState<RangeMode>("day");
+  const [loadError, setLoadError] = useState("");
+  const [rangeMode, setRangeMode] = useState<RangeMode>("year");
   const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
 
@@ -184,6 +296,7 @@ export default function DataOverview() {
         setSalesRecords(salesRes.data);
         setPurchases(purchaseRes.data);
       })
+      .catch(() => setLoadError("数据总览加载失败"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -199,71 +312,62 @@ export default function DataOverview() {
     [buckets, purchases],
   );
 
-  const salesTrend = useMemo(
+  const trendData = useMemo(
     () =>
       buckets.map((bucket) => ({
         label: bucket.label,
-        value: salesRecords
+        sales: salesRecords
           .filter((record) => inBucket(record.sale_time, bucket))
           .reduce((sum, record) => sum + Number(record.amount), 0),
-      })),
-    [buckets, salesRecords],
-  );
-
-  const profitTrend = useMemo(
-    () =>
-      buckets.map((bucket) => ({
-        label: bucket.label,
-        value: salesRecords
+        profit: salesRecords
           .filter((record) => inBucket(record.sale_time, bucket))
           .reduce((sum, record) => sum + Number(record.gross_profit), 0),
-      })),
-    [buckets, salesRecords],
-  );
-
-  const purchaseTrend = useMemo(
-    () =>
-      buckets.map((bucket) => ({
-        label: bucket.label,
-        value: purchases
+        purchase: purchases
           .filter((record) => inBucket(record.purchase_time, bucket))
           .reduce((sum, record) => sum + Number(record.total_amount), 0),
       })),
-    [buckets, purchases],
+    [buckets, purchases, salesRecords],
   );
 
-  const productDistribution = useMemo(() => {
-    const grouped = filteredSales.reduce<Record<string, number>>((acc, record) => {
-      acc[record.product] = (acc[record.product] ?? 0) + Number(record.amount);
-      return acc;
-    }, {});
-    return Object.entries(grouped)
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
-  }, [filteredSales]);
+  const summary = useMemo(() => {
+    const sales = filteredSales.reduce((sum, record) => sum + Number(record.amount), 0);
+    const profit = filteredSales.reduce((sum, record) => sum + Number(record.gross_profit), 0);
+    const purchase = filteredPurchases.reduce((sum, record) => sum + Number(record.total_amount), 0);
+    const unsettledAmount = filteredSales
+      .filter((record) => !record.is_settled)
+      .reduce((sum, record) => sum + Number(record.amount), 0);
+    return {
+      sales,
+      profit,
+      purchase,
+      margin: sales > 0 ? (profit / sales) * 100 : 0,
+      unsettledAmount,
+    };
+  }, [filteredPurchases, filteredSales]);
 
-  const customerDistribution = useMemo(() => {
-    const grouped = filteredSales.reduce<Record<string, number>>((acc, record) => {
-      acc[record.customer_name] = (acc[record.customer_name] ?? 0) + Number(record.amount);
-      return acc;
-    }, {});
-    return Object.entries(grouped)
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
-  }, [filteredSales]);
+  const productDistribution = useMemo(
+    () =>
+      groupDistribution(
+        filteredSales.map((record) => ({ label: record.product, value: Number(record.amount) })),
+      ),
+    [filteredSales],
+  );
 
-  const purchaseProductDistribution = useMemo(() => {
-    const grouped = filteredPurchases.reduce<Record<string, number>>((acc, record) => {
-      acc[record.product_name] = (acc[record.product_name] ?? 0) + Number(record.total_amount);
-      return acc;
-    }, {});
-    return Object.entries(grouped)
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
-  }, [filteredPurchases]);
+  const customerDistribution = useMemo(
+    () =>
+      groupDistribution(
+        filteredSales.map((record) => ({ label: record.customer_name, value: Number(record.amount) })),
+      ),
+    [filteredSales],
+  );
+
+  const purchaseProductDistribution = useMemo(
+    () =>
+      groupDistribution(
+        filteredPurchases.map((record) => ({ label: record.product_name, value: Number(record.total_amount) })),
+      ),
+    [filteredPurchases],
+  );
 
   if (loading) {
     return (
@@ -274,38 +378,65 @@ export default function DataOverview() {
   }
 
   return (
-    <div>
-      <Space style={{ width: "100%", justifyContent: "space-between", marginBottom: 16 }} wrap>
+    <div className="data-overview-page">
+      <Space className="data-overview-header" align="center" wrap>
         <Typography.Title level={4} style={{ margin: 0 }}>数据总览</Typography.Title>
+        <Typography.Text type="secondary">按一周、一月、一年查看经营数据</Typography.Text>
         <Segmented
           value={rangeMode}
           onChange={(value) => setRangeMode(value as RangeMode)}
           options={[
-            { label: "日", value: "day" },
             { label: "周", value: "week" },
+            { label: "月", value: "month" },
             { label: "年", value: "year" },
           ]}
         />
       </Space>
 
+      {loadError ? <Alert type="error" showIcon message={loadError} style={{ marginBottom: 16 }} /> : null}
+
       <Row gutter={[16, 16]}>
-        <Col xs={24} xl={12}>
-          <LineChart title="销售额趋势" data={salesTrend} color="#1677ff" />
+        <Col xs={24} sm={12} xl={6}>
+          <Card className="data-overview-card">
+            <Statistic title="销售额" value={formatCurrency(summary.sales)} />
+          </Card>
         </Col>
-        <Col xs={24} xl={12}>
-          <LineChart title="毛利润趋势" data={profitTrend} color="#52c41a" />
+        <Col xs={24} sm={12} xl={6}>
+          <Card className="data-overview-card">
+            <Statistic
+              title="毛利"
+              value={formatCurrency(summary.profit)}
+              suffix={<span className="data-overview-stat-suffix">{summary.margin.toFixed(1)}%</span>}
+            />
+          </Card>
         </Col>
-        <Col xs={24} xl={12}>
-          <BarChart title="采购金额趋势" data={purchaseTrend} color="#fa8c16" />
+        <Col xs={24} sm={12} xl={6}>
+          <Card className="data-overview-card">
+            <Statistic title="采购额" value={formatCurrency(summary.purchase)} />
+          </Card>
         </Col>
-        <Col xs={24} xl={12}>
-          <BarChart title="产品销售分布" data={productDistribution} color="#722ed1" />
+        <Col xs={24} sm={12} xl={6}>
+          <Card className="data-overview-card">
+            <Statistic title="未结清销售" value={formatCurrency(summary.unsettledAmount)} />
+          </Card>
         </Col>
-        <Col xs={24} xl={12}>
-          <BarChart title="客户销售分布" data={customerDistribution} color="#13c2c2" />
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col span={24}>
+          <TrendLineChart data={trendData} />
         </Col>
-        <Col xs={24} xl={12}>
-          <BarChart title="采购产品分布" data={purchaseProductDistribution} color="#eb2f96" />
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col xs={24} lg={8}>
+          <PieChart title="产品销售分布" data={productDistribution} />
+        </Col>
+        <Col xs={24} lg={8}>
+          <PieChart title="客户销售分布" data={customerDistribution} />
+        </Col>
+        <Col xs={24} lg={8}>
+          <PieChart title="采购产品分布" data={purchaseProductDistribution} />
         </Col>
       </Row>
     </div>

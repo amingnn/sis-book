@@ -172,7 +172,7 @@ export default function Products() {
               <Input />
             </Form.Item>
             <Form.Item label="图片">
-              <Space direction="vertical" size={12}>
+              <Space orientation="vertical" size={12}>
                 <Upload
                   accept="image/*"
                   showUploadList={false}

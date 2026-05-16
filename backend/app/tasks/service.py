@@ -1,8 +1,27 @@
 from datetime import datetime
 
-from sqlmodel import Session, col, select
+from sqlalchemy import case
+from sqlmodel import Session, col, func, select
 
 from app.tasks.models import Task, TaskCreate, TaskUpdate
+
+
+def _status_order_expr():
+    return case(
+        (Task.status == "todo", 0),
+        (Task.status == "doing", 1),
+        (Task.status == "done", 2),
+        else_=3,
+    )
+
+
+def _priority_order_expr():
+    return case(
+        (Task.priority == "high", 0),
+        (Task.priority == "medium", 1),
+        (Task.priority == "low", 2),
+        else_=3,
+    )
 
 
 def _apply_filters(
@@ -38,9 +57,10 @@ def list_tasks(
     due_only: bool = False,
 ) -> list[Task]:
     stmt = select(Task).order_by(
-        col(Task.status).asc(),
-        col(Task.priority).desc(),
+        _status_order_expr().asc(),
+        col(Task.due_date).is_(None).asc(),
         col(Task.due_date).asc(),
+        _priority_order_expr().asc(),
         col(Task.created_at).desc(),
     )
     stmt = _apply_filters(
@@ -98,26 +118,29 @@ def delete_task(session: Session, task_id: int) -> bool:
 
 
 def get_summary(session: Session) -> dict:
-    tasks = list(session.exec(select(Task)).all())
     today = datetime.now().date()
 
-    total_count = len(tasks)
-    todo_count = sum(1 for task in tasks if task.status == "todo")
-    doing_count = sum(1 for task in tasks if task.status == "doing")
-    done_count = sum(1 for task in tasks if task.status == "done")
-    overdue_count = sum(
-        1
-        for task in tasks
-        if task.status != "done" and task.due_date is not None and task.due_date < today
+    total_count = session.exec(select(func.count(Task.id))).one()
+    status_counts = dict(
+        session.exec(
+            select(Task.status, func.count(Task.id)).group_by(Task.status)
+        ).all()
     )
-
-    recent_tasks = sorted(tasks, key=lambda task: task.created_at, reverse=True)[:5]
+    overdue_count = session.exec(
+        select(func.count(Task.id))
+        .where(col(Task.status) != "done")
+        .where(col(Task.due_date).is_not(None))
+        .where(col(Task.due_date) < today)
+    ).one()
+    recent_tasks = session.exec(
+        select(Task).order_by(col(Task.created_at).desc()).limit(5)
+    ).all()
 
     return {
         "total_count": total_count,
-        "todo_count": todo_count,
-        "doing_count": doing_count,
-        "done_count": done_count,
+        "todo_count": status_counts.get("todo", 0),
+        "doing_count": status_counts.get("doing", 0),
+        "done_count": status_counts.get("done", 0),
         "overdue_count": overdue_count,
         "recent_tasks": [
             {

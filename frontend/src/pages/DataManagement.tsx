@@ -206,7 +206,7 @@ export default function DataManagement() {
     <div>
       <Typography.Title level={4}>数据管理</Typography.Title>
 
-      <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      <Space orientation="vertical" size={16} style={{ width: "100%" }}>
         <Card title="导入导出">
           <Space wrap>
             <Button
@@ -370,7 +370,7 @@ export default function DataManagement() {
           disabled: !hasImportableSheets || hasBlockingWarnings,
         }}
       >
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+        <Space orientation="vertical" size={16} style={{ width: "100%" }}>
           {previewSheets.map((sheet) => (
             <div key={sheet.name}>
               <Space wrap style={{ marginBottom: 8 }}>

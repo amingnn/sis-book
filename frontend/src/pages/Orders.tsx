@@ -776,7 +776,7 @@ export default function Orders() {
               {
                 title: "图片", dataIndex: "image", width: 110,
                 render: (_, record) => (
-                  <Space direction="vertical" size={6}>
+                  <Space orientation="vertical" size={6}>
                     {record.image ? (
                       <>
                         <img

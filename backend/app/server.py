@@ -2,7 +2,6 @@ import base64
 import sys
 import threading
 import time
-import traceback
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -10,7 +9,7 @@ from typing import Any
 import uvicorn
 from fastapi import FastAPI
 
-from app.debug import log
+from app.logging import logger
 
 
 def ensure_stdio_for_frozen_app() -> None:
@@ -23,23 +22,23 @@ def ensure_stdio_for_frozen_app() -> None:
 
 def start_server(app: FastAPI, port: int = 18234) -> None:
     try:
-        log(f"start_server: starting uvicorn on port {port}")
+        logger.info("启动 uvicorn 服务，端口 {}", port)
         uvicorn.run(app, host="127.0.0.1", port=port, log_config=None)
     except Exception:
-        log(f"start_server CRASHED: {traceback.format_exc()}")
+        logger.exception("uvicorn 服务异常退出")
 
 
 def wait_for_backend(port: int, path: str = "/api/dashboard", timeout_seconds: int = 15) -> bool:
-    log("waiting for backend to be ready...")
+    logger.info("等待后端服务就绪")
     attempts = timeout_seconds * 10
     for index in range(attempts):
         try:
             urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=1)
-            log(f"backend ready after {index * 0.1:.1f}s")
+            logger.info("后端服务已就绪，耗时 {:.1f}s", index * 0.1)
             return True
         except Exception:
             time.sleep(0.1)
-    log(f"WARNING: backend NOT ready after {timeout_seconds}s, opening window anyway")
+    logger.warning("后端服务在 {}s 内未就绪，继续打开窗口", timeout_seconds)
     return False
 
 
@@ -77,7 +76,7 @@ class DesktopApi:
             target_path.write_bytes(base64.b64decode(payload_text))
             return {"saved": True, "path": str(target_path)}
         except Exception:
-            log(f"DesktopApi.save_file failed: {traceback.format_exc()}")
+            logger.exception("桌面端保存文件失败")
             return {"saved": False, "error": "保存文件失败"}
 
 

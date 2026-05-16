@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from app.sales.models import SalesRecord
+from app.sales.models import SalesRecord, SalesRecordResponse
 from app.sales import service as sales_service
 
 
@@ -63,6 +63,31 @@ def test_list_records_applies_combined_filters(session):
     assert records[0].collection_time == date(2026, 4, 22)
 
 
+def test_due_collection_filter_excludes_settled_records_by_default(session):
+    session.add(
+        _record(
+            customer_name="未结清客户",
+            collection_time=date(2026, 4, 18),
+            is_settled=False,
+        )
+    )
+    session.add(
+        _record(
+            customer_name="已结清客户",
+            collection_time=date(2026, 4, 18),
+            is_settled=True,
+        )
+    )
+    session.commit()
+
+    records = sales_service.list_records(
+        session,
+        due_collection=True,
+    )
+
+    assert [record.customer_name for record in records] == ["未结清客户"]
+
+
 def test_get_summary_returns_amount_cost_profit_margin_and_unsettled_count(session):
     session.add(
         _record(
@@ -93,6 +118,13 @@ def test_get_summary_returns_amount_cost_profit_margin_and_unsettled_count(sessi
         "avg_margin": 33.33,
         "unsettled_count": 1,
     }
+
+
+def test_sales_record_response_profit_margin_uses_sales_amount():
+    record = SalesRecordResponse.model_validate(_record(id=1, amount=Decimal("100"), cost=Decimal("60")))
+
+    assert record.gross_profit == Decimal("40")
+    assert record.profit_margin == 40.0
 
 
 def test_get_due_collection_summary_returns_sorted_top_records(session):

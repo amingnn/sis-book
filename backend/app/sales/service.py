@@ -43,6 +43,7 @@ def _apply_filters(
         statement = statement.where(col(SalesRecord.sale_time) <= end_date)
     if due_collection:
         target_date = due_date or date.today()
+        statement = statement.where(col(SalesRecord.is_settled) == False)  # noqa: E712
         statement = statement.where(col(SalesRecord.collection_time).is_not(None))
         statement = statement.where(col(SalesRecord.collection_time) <= target_date)
     return statement

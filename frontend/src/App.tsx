@@ -1,31 +1,47 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Spin } from "antd";
+
 import AppLayout from "./components/AppLayout";
-import Dashboard from "./pages/Dashboard";
-import DataOverview from "./pages/DataOverview";
-import SalesRecords from "./pages/SalesRecords";
-import Purchases from "./pages/Purchases";
-import Orders from "./pages/Orders";
-import Customers from "./pages/Customers";
-import Suppliers from "./pages/Suppliers";
-import Products from "./pages/Products";
-import Tasks from "./pages/Tasks";
-import DataManagement from "./pages/DataManagement";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const DataOverview = lazy(() => import("./pages/DataOverview"));
+const SalesRecords = lazy(() => import("./pages/SalesRecords"));
+const Purchases = lazy(() => import("./pages/Purchases"));
+const Orders = lazy(() => import("./pages/Orders"));
+const Customers = lazy(() => import("./pages/Customers"));
+const Suppliers = lazy(() => import("./pages/Suppliers"));
+const Products = lazy(() => import("./pages/Products"));
+const Tasks = lazy(() => import("./pages/Tasks"));
+const DataManagement = lazy(() => import("./pages/DataManagement"));
+
+function PageFallback() {
+  return (
+    <div style={{ textAlign: "center", padding: 80 }}>
+      <Spin size="large" />
+    </div>
+  );
+}
+
+function withFallback(page: ReactNode) {
+  return <Suspense fallback={<PageFallback />}>{page}</Suspense>;
+}
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/data-overview" element={<DataOverview />} />
-          <Route path="/sales" element={<SalesRecords />} />
-          <Route path="/purchases" element={<Purchases />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/suppliers" element={<Suppliers />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/data-management" element={<DataManagement />} />
+          <Route path="/" element={withFallback(<Dashboard />)} />
+          <Route path="/data-overview" element={withFallback(<DataOverview />)} />
+          <Route path="/sales" element={withFallback(<SalesRecords />)} />
+          <Route path="/purchases" element={withFallback(<Purchases />)} />
+          <Route path="/orders" element={withFallback(<Orders />)} />
+          <Route path="/customers" element={withFallback(<Customers />)} />
+          <Route path="/suppliers" element={withFallback(<Suppliers />)} />
+          <Route path="/products" element={withFallback(<Products />)} />
+          <Route path="/tasks" element={withFallback(<Tasks />)} />
+          <Route path="/data-management" element={withFallback(<DataManagement />)} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

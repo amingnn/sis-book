@@ -1,13 +1,19 @@
+from alembic import command
 from sqlalchemy import create_engine, inspect, text
 
 from app import database
 
 
 BASELINE_REVISION = "20260514_0001"
+HEAD_REVISION = "20260516_0002"
 
 
 def _column_names(conn, table_name: str) -> set[str]:
     return {column["name"] for column in inspect(conn).get_columns(table_name)}
+
+
+def _index_names(conn, table_name: str) -> set[str]:
+    return {index["name"] for index in inspect(conn).get_indexes(table_name)}
 
 
 def _create_legacy_order_tables(conn) -> None:
@@ -130,7 +136,11 @@ def test_alembic_baseline_migrates_legacy_schema_and_backfills_data(tmp_path):
         assert "collection_time" in _column_names(conn, "salesrecord")
         assert "paid_amount" in _column_names(conn, "purchaseorder")
         assert "supplier_name" not in _column_names(conn, "product")
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == BASELINE_REVISION
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD_REVISION
+        assert "ix_salesrecord_sale_time" in _index_names(conn, "salesrecord")
+        assert "ix_salesrecord_settlement_collection" in _index_names(conn, "salesrecord")
+        assert "ix_purchaseorder_purchase_time" in _index_names(conn, "purchaseorder")
+        assert "ix_task_status_due_date" in _index_names(conn, "task")
         assert conn.execute(text("SELECT image FROM salesorderitem WHERE id = 10")).scalar_one() == "img/legacy-product.jpg"
         assert conn.execute(text("SELECT name FROM supplier")).scalar_one() == "胜利厂家"
         product = conn.execute(
@@ -152,7 +162,28 @@ def test_alembic_migrations_are_idempotent(tmp_path):
     database.run_alembic_migrations(engine)
 
     with engine.begin() as conn:
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD_REVISION
+
+
+def test_query_index_migration_can_downgrade_and_upgrade(tmp_path):
+    db_path = tmp_path / "index-cycle.db"
+    config = database.get_alembic_config(f"sqlite:///{db_path}")
+
+    command.upgrade(config, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        assert "ix_salesrecord_sale_time" in _index_names(conn, "salesrecord")
+
+    command.downgrade(config, BASELINE_REVISION)
+    with engine.begin() as conn:
+        assert "ix_salesrecord_sale_time" not in _index_names(conn, "salesrecord")
         assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == BASELINE_REVISION
+
+    command.upgrade(config, "head")
+    with engine.begin() as conn:
+        assert "ix_salesrecord_sale_time" in _index_names(conn, "salesrecord")
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD_REVISION
+    engine.dispose()
 
 
 def test_alembic_baseline_drops_product_supplier_name_destructively(tmp_path):
@@ -212,4 +243,4 @@ def test_alembic_baseline_drops_product_supplier_name_destructively(tmp_path):
             )
         ).one()
         assert product == ("羽毛球", "img/product.jpg", 12, "60*40*30", 0.072, 2.5, 120, "热销")
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == BASELINE_REVISION
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD_REVISION

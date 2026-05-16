@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Card,
@@ -23,6 +23,7 @@ import {
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { useSearchParams } from "react-router-dom";
 import { ordersApi, type SalesOrder } from "../api/orders";
 import { purchasesApi, type PurchaseOrder } from "../api/purchases";
 import { salesApi, type SalesRecord } from "../api/sales";
@@ -78,6 +79,7 @@ interface RelatedOption {
   value: number;
 }
 type View = "list" | "form";
+const taskRouteFilterKeys = ["keyword", "status", "priority", "category"];
 
 const relatedTypeLabelMap: Record<string, string> = {
   sales: "销售记录",
@@ -85,18 +87,38 @@ const relatedTypeLabelMap: Record<string, string> = {
   orders: "开单",
 };
 
+function isTaskStatus(value: string | null): value is TaskStatus {
+  return value === "todo" || value === "doing" || value === "done";
+}
+
+function isTaskPriority(value: string | null): value is TaskPriority {
+  return value === "high" || value === "medium" || value === "low";
+}
+
+function hasTaskRouteFilters(searchParams: URLSearchParams): boolean {
+  return taskRouteFilterKeys.some((key) => searchParams.has(key));
+}
+
 export default function Tasks() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<View>("list");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [keyword, setKeyword] = useState("");
-  const [status, setStatus] = useState<TaskStatus | undefined>();
-  const [priority, setPriority] = useState<TaskPriority | undefined>();
-  const [category, setCategory] = useState("");
+  const [keyword, setKeyword] = useState(() => searchParams.get("keyword") ?? "");
+  const [status, setStatus] = useState<TaskStatus | undefined>(() => {
+    const value = searchParams.get("status");
+    return isTaskStatus(value) ? value : undefined;
+  });
+  const [priority, setPriority] = useState<TaskPriority | undefined>(() => {
+    const value = searchParams.get("priority");
+    return isTaskPriority(value) ? value : undefined;
+  });
+  const [category, setCategory] = useState(() => searchParams.get("category") ?? "");
   const [relatedType, setRelatedType] = useState("");
   const [relatedOptions, setRelatedOptions] = useState<RelatedOption[]>([]);
   const [relatedSearching, setRelatedSearching] = useState(false);
+  const requestIdRef = useRef(0);
   const [form] = Form.useForm();
 
   const categories = useMemo(() => {
@@ -104,7 +126,19 @@ export default function Tasks() {
     return Array.from(new Set(allCategories));
   }, [tasks]);
 
+  useEffect(() => {
+    if (!hasTaskRouteFilters(searchParams)) return;
+    const nextStatus = searchParams.get("status");
+    const nextPriority = searchParams.get("priority");
+    setKeyword(searchParams.get("keyword") ?? "");
+    setStatus(isTaskStatus(nextStatus) ? nextStatus : undefined);
+    setPriority(isTaskPriority(nextPriority) ? nextPriority : undefined);
+    setCategory(searchParams.get("category") ?? "");
+  }, [searchParams]);
+
   const fetchData = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setLoading(true);
     try {
       const params: Record<string, unknown> = {};
@@ -113,11 +147,17 @@ export default function Tasks() {
       if (priority) params.priority = priority;
       if (category) params.category = category;
       const res = await tasksApi.list(params);
-      setTasks(res.data);
+      if (requestId === requestIdRef.current) {
+        setTasks(res.data);
+      }
     } catch {
-      message.error("加载任务失败");
+      if (requestId === requestIdRef.current) {
+        message.error("加载任务失败");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [category, keyword, priority, status]);
 
@@ -204,6 +244,9 @@ export default function Tasks() {
     setStatus(undefined);
     setPriority(undefined);
     setCategory("");
+    if (hasTaskRouteFilters(searchParams)) {
+      setSearchParams({});
+    }
   };
 
   const searchRelatedOptions = useCallback(
