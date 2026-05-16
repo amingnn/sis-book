@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.logging import logger
 from app.customer.models import Customer
 from app.database import get_session, init_db
 from app.orders.models import SalesOrder, SalesOrderItem
@@ -158,7 +159,7 @@ def seed() -> None:
         )
 
     session.commit()
-    print("测试数据生成完毕: 客户/厂家/产品资料 + 销售/采购/开单 + 任务")
+    logger.success("测试数据生成完毕：客户/厂家/产品资料 + 销售/采购/开单 + 任务")
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.logging import logger
 from seeds.sample_data import (
     CUSTOMERS,
     PAYMENT_METHODS,
@@ -143,7 +144,7 @@ def main() -> None:
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for sheet_name, rows in build_workbook_rows().items():
             pd.DataFrame(rows).to_excel(writer, sheet_name=sheet_name, index=False)
-    print(f"随机 Excel 已生成: {output_path}")
+    logger.success("随机 Excel 已生成：{}", output_path)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Button,
   Card,
@@ -35,20 +35,38 @@ import { createActionColumn } from "../components/TableActions";
 const { RangePicker } = DatePicker;
 type View = "list" | "form";
 type SettlementFilter = "due" | "unsettled" | "settled" | undefined;
+const routeFilterKeys = ["q", "customer_name", "product", "payment_method", "due", "settled"];
+
+function getSettlementFilterFromParams(searchParams: URLSearchParams): SettlementFilter {
+  const settledParam = searchParams.get("settled");
+  const dueParam = searchParams.get("due");
+  if (dueParam === "collection") return "due";
+  if (settledParam === "unsettled") return "unsettled";
+  if (settledParam === "settled") return "settled";
+  return undefined;
+}
+
+function hasRouteFilters(searchParams: URLSearchParams): boolean {
+  return routeFilterKeys.some((key) => searchParams.has(key));
+}
 
 export default function SalesRecords() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<View>("list");
   const [records, setRecords] = useState<SalesRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const requestIdRef = useRef(0);
+  const suppressNextEmptyParamSyncRef = useRef(false);
   const [form] = Form.useForm();
 
-  const [query, setQuery] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [productName, setProductName] = useState("");
-  const [settlementFilter, setSettlementFilter] = useState<SettlementFilter>();
-  const [paymentMethod, setPaymentMethod] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [customerName, setCustomerName] = useState(() => searchParams.get("customer_name") ?? "");
+  const [productName, setProductName] = useState(() => searchParams.get("product") ?? "");
+  const [settlementFilter, setSettlementFilter] = useState<SettlementFilter>(() =>
+    getSettlementFilterFromParams(searchParams),
+  );
+  const [paymentMethod, setPaymentMethod] = useState(() => searchParams.get("payment_method") ?? "");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [dateRange, setDateRange] = useState<
@@ -56,15 +74,23 @@ export default function SalesRecords() {
   >(null);
 
   useEffect(() => {
-    const settledParam = searchParams.get("settled");
-    const dueParam = searchParams.get("due");
-    if (dueParam === "collection") {
-      setSettlementFilter("due");
-    } else if (settledParam === "unsettled") {
-      setSettlementFilter("unsettled");
-    } else {
-      setSettlementFilter(undefined);
+    const hasRouteFilter = hasRouteFilters(searchParams);
+    if (hasRouteFilter) {
+      suppressNextEmptyParamSyncRef.current = false;
+      setQuery(searchParams.get("q") ?? "");
+      setCustomerName(searchParams.get("customer_name") ?? "");
+      setProductName(searchParams.get("product") ?? "");
+      setPaymentMethod(searchParams.get("payment_method") ?? "");
+      setSettlementFilter(getSettlementFilterFromParams(searchParams));
+      return;
     }
+
+    if (suppressNextEmptyParamSyncRef.current) {
+      suppressNextEmptyParamSyncRef.current = false;
+      return;
+    }
+
+    setSettlementFilter(undefined);
   }, [searchParams]);
 
   const buildParams = useCallback(() => {
@@ -87,26 +113,41 @@ export default function SalesRecords() {
   }, [query, customerName, productName, paymentMethod, settlementFilter, dateRange]);
 
   const fetchData = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setLoading(true);
     try {
       const params = buildParams();
       const listRes = await salesApi.list(params);
-      setRecords(listRes.data);
+      if (requestId === requestIdRef.current) {
+        setRecords(listRes.data);
+      }
     } catch {
-      message.error("加载数据失败");
+      if (requestId === requestIdRef.current) {
+        message.error("加载数据失败");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [buildParams]);
 
+  const clearRouteFilters = useCallback(() => {
+    if (hasRouteFilters(searchParams)) {
+      suppressNextEmptyParamSyncRef.current = true;
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams]);
+
   const handleResetFilters = () => {
-    const dueParam = searchParams.get("due");
     setQuery("");
     setCustomerName("");
     setProductName("");
     setPaymentMethod("");
     setDateRange(null);
-    setSettlementFilter(dueParam === "collection" ? "due" : undefined);
+    setSettlementFilter(undefined);
+    clearRouteFilters();
   };
 
   useEffect(() => {
@@ -229,7 +270,10 @@ export default function SalesRecords() {
         <Tag
           color={v ? "green" : "red"}
           style={{ cursor: "pointer" }}
-          onClick={() => setSettlementFilter(v ? "settled" : "unsettled")}
+          onClick={() => {
+            clearRouteFilters();
+            setSettlementFilter(v ? "settled" : "unsettled");
+          }}
         >
           {v ? "已结清" : "未结清"}
         </Tag>
@@ -390,7 +434,7 @@ export default function SalesRecords() {
       <PageToolbar
         title="销售"
         searchValue={query}
-        searchPlaceholder="模模糊搜索"
+        searchPlaceholder="模糊搜索"
         onSearchChange={setQuery}
         onSearch={() => fetchData()}
         primaryText="新增销售记录"
@@ -430,7 +474,10 @@ export default function SalesRecords() {
             placeholder="是否结清"
             allowClear
             value={settlementFilter}
-            onChange={(value) => setSettlementFilter(value)}
+            onChange={(value) => {
+              clearRouteFilters();
+              setSettlementFilter(value);
+            }}
             style={{ width: 160 }}
             options={[
               { label: "到期/超时", value: "due" },

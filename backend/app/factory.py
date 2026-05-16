@@ -8,8 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.customer.router import router as customer_router
 from app.dashboard.router import router as dashboard_router
 from app.database import init_db
-from app.debug import log
 from app.import_export.router import router as import_export_router
+from app.logging import logger
 from app.orders.router import router as orders_router
 from app.product.router import router as product_router
 from app.purchases.router import router as purchases_router
@@ -23,9 +23,9 @@ from app.tasks.router import router as tasks_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    log("lifespan: init_db start")
+    logger.info("初始化数据库开始")
     init_db()
-    log("lifespan: init_db done")
+    logger.info("初始化数据库完成")
     start_scheduler()
     yield
     stop_scheduler()

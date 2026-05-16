@@ -52,6 +52,6 @@ class SalesRecordResponse(SalesRecordBase):
     @computed_field
     @property
     def profit_margin(self) -> float:
-        if self.cost == 0:
+        if self.amount == 0:
             return 0.0
-        return float((self.amount - self.cost) / self.cost * 100)
+        return float((self.amount - self.cost) / self.amount * 100)

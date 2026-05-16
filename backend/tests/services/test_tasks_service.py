@@ -34,6 +34,64 @@ def test_update_task_sets_and_clears_completed_at_on_status_change(session, monk
     assert reopened.completed_at is None
 
 
+def test_list_tasks_orders_due_open_tasks_with_explicit_priority(session):
+    session.add(
+        Task(
+            title="已完成旧任务",
+            status="done",
+            priority="high",
+            due_date=date(2026, 4, 18),
+            created_at=datetime(2026, 4, 23, 9, 0, 0),
+        )
+    )
+    session.add(
+        Task(
+            title="待办低优先级",
+            status="todo",
+            priority="low",
+            due_date=date(2026, 4, 20),
+            created_at=datetime(2026, 4, 22, 9, 0, 0),
+        )
+    )
+    session.add(
+        Task(
+            title="待办高优先级",
+            status="todo",
+            priority="high",
+            due_date=date(2026, 4, 20),
+            created_at=datetime(2026, 4, 21, 9, 0, 0),
+        )
+    )
+    session.add(
+        Task(
+            title="待办无截止",
+            status="todo",
+            priority="high",
+            created_at=datetime(2026, 4, 24, 9, 0, 0),
+        )
+    )
+    session.add(
+        Task(
+            title="进行中任务",
+            status="doing",
+            priority="high",
+            due_date=date(2026, 4, 19),
+            created_at=datetime(2026, 4, 25, 9, 0, 0),
+        )
+    )
+    session.commit()
+
+    tasks = tasks_service.list_tasks(session)
+
+    assert [task.title for task in tasks] == [
+        "待办高优先级",
+        "待办低优先级",
+        "待办无截止",
+        "进行中任务",
+        "已完成旧任务",
+    ]
+
+
 def test_get_summary_returns_counts_overdue_and_recent_tasks(session, monkeypatch):
     monkeypatch.setattr(tasks_service, "datetime", FrozenDateTime)
     session.add(
