@@ -3,9 +3,11 @@
 
 #define MyAppName      "暮橙体育记账本"
 #define MyAppExeName   "暮橙记账本.exe"
-#define MyAppVersion   "dev"
 #define MyAppPublisher "暮橙体育"
 #define MyAppIconFile  "..\build\assets\app-icon.ico"
+#ifndef MyAppVersion
+#define MyAppVersion   "dev"
+#endif
 
 [Setup]
 AppId={{B8F2E3A1-5C4D-4E6F-8A9B-1C2D3E4F5A6B}
@@ -14,7 +16,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\暮橙记账本
 DefaultGroupName={#MyAppName}
-OutputBaseFilename=mucheng-book_setup
+OutputBaseFilename=mucheng-book-{#MyAppVersion}
 OutputDir=..\dist
 Compression=lzma
 SolidCompression=yes
@@ -26,7 +28,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 #endif
 
 [Languages]
-Name: "default"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
