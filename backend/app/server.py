@@ -83,20 +83,27 @@ class DesktopApi:
 def run_desktop_app(app: FastAPI, port: int = 18234) -> None:
     server_thread = threading.Thread(target=start_server, args=(app, port), daemon=True)
     server_thread.start()
-    wait_for_backend(port)
+    ready = wait_for_backend(port)
 
-    import webview
+    try:
+        import webview
 
-    webview.settings["ALLOW_DOWNLOADS"] = True
-    webview.create_window(
-        "暮橙体育记账本",
-        f"http://127.0.0.1:{port}",
-        js_api=DesktopApi(),
-        width=1280,
-        height=800,
-        min_size=(1024, 600),
-    )
-    webview.start()
+        window_url = f"http://127.0.0.1:{port}"
+        logger.info("创建桌面窗口，url={}，backend_ready={}", window_url, ready)
+        webview.settings["ALLOW_DOWNLOADS"] = True
+        webview.create_window(
+            "暮橙体育记账本",
+            window_url,
+            js_api=DesktopApi(),
+            width=1280,
+            height=800,
+            min_size=(1024, 600),
+        )
+        webview.start()
+        logger.info("桌面窗口已退出")
+    except Exception:
+        logger.exception("桌面窗口初始化失败")
+        raise
 
 
 def run_dev_server(port: int = 18234) -> None:
