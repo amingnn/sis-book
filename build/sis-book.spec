@@ -40,6 +40,8 @@ a = Analysis(  # noqa: F821
     binaries=extra_binaries,
     datas=[
         (str(ROOT / 'frontend' / 'dist'), 'frontend/dist'),
+        (str(ROOT / 'backend' / 'alembic.ini'), '.'),
+        (str(ROOT / 'backend' / 'alembic'), 'alembic'),
     ] + extra_datas,
     hiddenimports=[
         'app.sales.router',
