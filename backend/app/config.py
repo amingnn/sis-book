@@ -15,7 +15,7 @@ def get_data_dir(app_name: str = APP_NAME) -> Path:
     if env_path := os.getenv("SIS_BOOK_DATA"):
         data_path = Path(env_path).expanduser()
     else:
-        data_path = Path(user_data_dir(app_name))
+        data_path = Path(user_data_dir(app_name, appauthor=False))
     data_path.mkdir(parents=True, exist_ok=True)
     return data_path
 

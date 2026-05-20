@@ -18,10 +18,14 @@ def test_get_data_dir_uses_env_path(monkeypatch, tmp_path):
 def test_get_data_dir_uses_platform_default(monkeypatch, tmp_path):
     default_dir = tmp_path / "platform-data"
     monkeypatch.delenv("SIS_BOOK_DATA", raising=False)
-    monkeypatch.setattr(config, "user_data_dir", lambda app_name: str(default_dir / app_name))
+
+    def fake_user_data_dir(app_name, appauthor=None):
+        assert appauthor is False
+        return str(default_dir / app_name)
+
+    monkeypatch.setattr(config, "user_data_dir", fake_user_data_dir)
 
     data_dir = config.get_data_dir("demo-book")
-
     assert data_dir == default_dir / "demo-book"
     assert data_dir.is_dir()
 

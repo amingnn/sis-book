@@ -1,12 +1,14 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from time import perf_counter
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.customer.router import router as customer_router
 from app.dashboard.router import router as dashboard_router
+from app.config import DATABASE_PATH
 from app.database import init_db
 from app.import_export.router import router as import_export_router
 from app.logging import logger
@@ -23,9 +25,14 @@ from app.tasks.router import router as tasks_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("初始化数据库开始")
-    init_db()
-    logger.info("初始化数据库完成")
+    started_at = perf_counter()
+    logger.info("初始化数据库开始，path={}", DATABASE_PATH)
+    try:
+        init_db()
+    except Exception:
+        logger.exception("初始化数据库失败，path={}", DATABASE_PATH)
+        raise
+    logger.info("初始化数据库完成，耗时 {:.2f}s", perf_counter() - started_at)
     start_scheduler()
     yield
     stop_scheduler()
