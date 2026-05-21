@@ -31,6 +31,24 @@ interface LineSeries {
   getValue: (point: TrendPoint) => number;
 }
 
+interface ActiveTrendPoint {
+  seriesLabel: string;
+  label: string;
+  value: number;
+  x: number;
+  y: number;
+  color: string;
+}
+
+interface ActiveSlice {
+  label: string;
+  value: number;
+  percent: number;
+  x: number;
+  y: number;
+  color: string;
+}
+
 const chartColors = ["#1677ff", "#fa8c16", "#52c41a", "#eb2f96", "#13c2c2", "#722ed1"];
 
 const currencyFormatter = new Intl.NumberFormat("zh-CN", {
@@ -146,6 +164,7 @@ function TrendLineChart({ data }: { data: TrendPoint[] }) {
   const padding = { top: 32, right: 34, bottom: 52, left: 70 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
+  const [activePoint, setActivePoint] = useState<ActiveTrendPoint | null>(null);
   const series: LineSeries[] = [
     { label: "销售额", color: "#1677ff", getValue: (point) => point.sales },
     { label: "采购额", color: "#fa8c16", getValue: (point) => point.purchase },
@@ -175,7 +194,14 @@ function TrendLineChart({ data }: { data: TrendPoint[] }) {
       }
       className="data-overview-card"
     >
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="经营趋势折线图">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        width="100%"
+        height={height}
+        role="img"
+        aria-label="经营趋势折线图"
+        onMouseLeave={() => setActivePoint(null)}
+      >
         <title>经营趋势折线图</title>
         {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
           const y = padding.top + innerHeight - ratio * innerHeight;
@@ -194,12 +220,63 @@ function TrendLineChart({ data }: { data: TrendPoint[] }) {
           return (
             <g key={line.label}>
               <path d={path} fill="none" stroke={line.color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-              {points.map((point) => (
-                <circle key={`${line.label}-${point.label}`} cx={point.x} cy={point.y} r={4} fill="#fff" stroke={line.color} strokeWidth={2} />
-              ))}
+              {points.map((point) => {
+                const active = activePoint?.seriesLabel === line.label && activePoint.label === point.label;
+                const nextPoint = {
+                  seriesLabel: line.label,
+                  label: point.label,
+                  value: point.value,
+                  x: point.x,
+                  y: point.y,
+                  color: line.color,
+                };
+                return (
+                  <g
+                    key={`${line.label}-${point.label}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${point.label} ${line.label} ${formatCurrency(point.value)}`}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={() => setActivePoint(nextPoint)}
+                    onFocus={() => setActivePoint(nextPoint)}
+                    onClick={() => setActivePoint(nextPoint)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setActivePoint(nextPoint);
+                      }
+                    }}
+                  >
+                    <circle cx={point.x} cy={point.y} r={12} fill="transparent" />
+                    <circle cx={point.x} cy={point.y} r={active ? 6 : 4} fill="#fff" stroke={line.color} strokeWidth={2} />
+                    <title>{`${point.label} ${line.label}：${formatCurrency(point.value)}`}</title>
+                  </g>
+                );
+              })}
             </g>
           );
         })}
+        {activePoint
+          ? (() => {
+              const tooltipWidth = 168;
+              const tooltipHeight = 52;
+              const tooltipX = Math.min(Math.max(activePoint.x - tooltipWidth / 2, 8), width - tooltipWidth - 8);
+              const tooltipY = activePoint.y > 96 ? activePoint.y - tooltipHeight - 14 : activePoint.y + 18;
+              return (
+                <g pointerEvents="none">
+                  <line x1={activePoint.x} y1={padding.top} x2={activePoint.x} y2={height - padding.bottom} stroke="#d9e2ec" strokeDasharray="4 4" />
+                  <rect x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight} rx={6} fill="#111827" opacity={0.92} />
+                  <circle cx={tooltipX + 14} cy={tooltipY + 18} r={4} fill={activePoint.color} />
+                  <text x={tooltipX + 26} y={tooltipY + 22} fontSize={12} fill="#fff">
+                    {activePoint.label} · {activePoint.seriesLabel}
+                  </text>
+                  <text x={tooltipX + 14} y={tooltipY + 40} fontSize={14} fontWeight={700} fill="#fff">
+                    {formatCurrency(activePoint.value)}
+                  </text>
+                </g>
+              );
+            })()
+          : null}
         {data.map((point, index) => {
           const showLabel = data.length <= 10 || index % 2 === 0 || index === data.length - 1;
           const x = padding.left + (data.length === 1 ? innerWidth / 2 : (index / (data.length - 1)) * innerWidth);
@@ -216,6 +293,7 @@ function TrendLineChart({ data }: { data: TrendPoint[] }) {
 
 function PieChart({ title, data }: { title: string; data: DistributionPoint[] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
+  const [activeSlice, setActiveSlice] = useState<ActiveSlice | null>(null);
   const slices = data.reduce<
     Array<{
       item: DistributionPoint;
@@ -245,26 +323,82 @@ function PieChart({ title, data }: { title: string; data: DistributionPoint[] })
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <div className="data-overview-pie-content">
-          <svg viewBox="0 0 240 220" width="100%" height={220} role="img" aria-label={`${title}饼图`}>
+          <svg
+            viewBox="0 0 240 220"
+            width="100%"
+            height={220}
+            role="img"
+            aria-label={`${title}饼图`}
+            onMouseLeave={() => setActiveSlice(null)}
+          >
             <title>{`${title}饼图`}</title>
             {slices.map(({ item, index, startAngle, endAngle }) => {
+              const color = chartColors[index % chartColors.length];
+              const percent = total > 0 ? (item.value / total) * 100 : 0;
+              const middleAngle = (startAngle + endAngle) / 2;
+              const labelPosition = polarToCartesian(120, 104, 70, middleAngle);
+              const active = activeSlice?.label === item.label;
+              const nextSlice = {
+                label: item.label,
+                value: item.value,
+                percent,
+                x: labelPosition.x,
+                y: labelPosition.y,
+                color,
+              };
               return (
                 <path
                   key={item.label}
                   d={describePieSlice(120, 104, 82, startAngle, endAngle)}
-                  fill={chartColors[index % chartColors.length]}
+                  fill={color}
                   stroke="#fff"
-                  strokeWidth={2}
-                />
+                  strokeWidth={active ? 4 : 2}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${item.label} ${formatCurrency(item.value)} ${percent.toFixed(1)}%`}
+                  style={{ cursor: "pointer" }}
+                  transform={active ? `translate(${(labelPosition.x - 120) * 0.04} ${(labelPosition.y - 104) * 0.04})` : undefined}
+                  onMouseEnter={() => setActiveSlice(nextSlice)}
+                  onFocus={() => setActiveSlice(nextSlice)}
+                  onClick={() => setActiveSlice(nextSlice)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setActiveSlice(nextSlice);
+                    }
+                  }}
+                >
+                  <title>{`${item.label}：${formatCurrency(item.value)}，${percent.toFixed(1)}%`}</title>
+                </path>
               );
             })}
             <circle cx={120} cy={104} r={44} fill="#fff" />
             <text x={120} y={98} textAnchor="middle" fontSize={12} fill="#6b7280">
-              合计
+              {activeSlice ? "已选择" : "合计"}
             </text>
             <text x={120} y={120} textAnchor="middle" fontSize={15} fontWeight={700} fill="#111827">
-              {formatCompactCurrency(total)}
+              {formatCompactCurrency(activeSlice?.value ?? total)}
             </text>
+            {activeSlice
+              ? (() => {
+                  const tooltipWidth = 152;
+                  const tooltipHeight = 52;
+                  const tooltipX = Math.min(Math.max(activeSlice.x - tooltipWidth / 2, 8), 240 - tooltipWidth - 8);
+                  const tooltipY = activeSlice.y > 110 ? activeSlice.y - tooltipHeight - 12 : activeSlice.y + 12;
+                  return (
+                    <g pointerEvents="none">
+                      <rect x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight} rx={6} fill="#111827" opacity={0.92} />
+                      <circle cx={tooltipX + 14} cy={tooltipY + 18} r={4} fill={activeSlice.color} />
+                      <text x={tooltipX + 26} y={tooltipY + 22} fontSize={12} fill="#fff">
+                        {activeSlice.label}
+                      </text>
+                      <text x={tooltipX + 14} y={tooltipY + 40} fontSize={13} fontWeight={700} fill="#fff">
+                        {formatCurrency(activeSlice.value)} · {activeSlice.percent.toFixed(1)}%
+                      </text>
+                    </g>
+                  );
+                })()
+              : null}
           </svg>
           <div className="data-overview-pie-legend">
             {data.map((item, index) => (

@@ -3,12 +3,15 @@ from decimal import Decimal
 
 from sqlmodel import Session, col, func, or_, select
 
+from app.orders.images import store_order_item_image
 from app.orders.models import (
     SalesOrder,
     SalesOrderCreate,
     SalesOrderItem,
+    SalesOrderItemCreate,
     SalesOrderUpdate,
 )
+from app.product.models import Product
 from app.sales.models import SalesRecord
 
 
@@ -57,11 +60,16 @@ def list_orders(
     if end_date:
         stmt = stmt.where(col(SalesOrder.sales_date) <= end_date)
     stmt = stmt.order_by(SalesOrder.id.desc())
-    return list(session.exec(stmt).all())
+    orders = list(session.exec(stmt).all())
+    _hydrate_missing_item_images(session, orders)
+    return orders
 
 
 def get_order(session: Session, order_id: int) -> SalesOrder | None:
-    return session.get(SalesOrder, order_id)
+    order = session.get(SalesOrder, order_id)
+    if order:
+        _hydrate_missing_item_images(session, [order])
+    return order
 
 
 def _calc_order_total(items: list[SalesOrderItem]) -> Decimal:
@@ -89,6 +97,39 @@ def _build_order_sales_notes(order: SalesOrder) -> str:
     if order.notes.strip():
         parts.append(order.notes.strip())
     return "\n".join(parts)
+
+
+def _hydrate_missing_item_images(session: Session, orders: list[SalesOrder]) -> None:
+    product_names = {
+        item.product_name.strip()
+        for order in orders
+        for item in order.items
+        if not item.image and item.product_name.strip()
+    }
+    if not product_names:
+        return
+
+    products = session.exec(
+        select(Product).where(col(Product.name).in_(product_names))
+    ).all()
+    image_lookup = {product.name: product.image for product in products if product.image}
+    if not image_lookup:
+        return
+
+    for order in orders:
+        for item in order.items:
+            if not item.image:
+                item.image = image_lookup.get(item.product_name.strip(), "")
+
+
+def _build_order_item(item_data: SalesOrderItemCreate, order_number: str) -> SalesOrderItem:
+    item_payload = item_data.model_dump()
+    item_payload["image"] = store_order_item_image(
+        item_payload.get("image", ""),
+        order_number,
+        item_payload.get("product_name", ""),
+    )
+    return SalesOrderItem(**item_payload)
 
 
 def _sync_sales_record_for_order(session: Session, order: SalesOrder) -> None:
@@ -133,12 +174,11 @@ def create_order(session: Session, data: SalesOrderCreate) -> SalesOrder:
     order.order_number = _generate_order_number(session, data.sales_date)
 
     for item_data in data.items:
-        item_payload = item_data.model_dump()
-        item = SalesOrderItem(**item_payload)
-        order.items.append(item)
+        order.items.append(_build_order_item(item_data, order.order_number))
 
     session.add(order)
     session.flush()
+    _hydrate_missing_item_images(session, [order])
     _sync_sales_record_for_order(session, order)
     session.commit()
     session.refresh(order)
@@ -164,11 +204,11 @@ def update_order(
 
     order.items.clear()
     for item_data in data.items:
-        item_payload = item_data.model_dump()
-        order.items.append(SalesOrderItem(**item_payload))
+        order.items.append(_build_order_item(item_data, order.order_number))
 
     session.add(order)
     session.flush()
+    _hydrate_missing_item_images(session, [order])
     _sync_sales_record_for_order(session, order)
     session.commit()
     session.refresh(order)

@@ -925,6 +925,7 @@ dependencies = [
     { name = "loguru" },
     { name = "openpyxl" },
     { name = "pandas" },
+    { name = "pillow" },
     { name = "platformdirs" },
     { name = "python-dotenv" },
     { name = "pywebview" },
@@ -934,7 +935,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "pillow" },
     { name = "pytest" },
     { name = "rich" },
 ]
@@ -946,6 +946,7 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.3.3" },
+    { name = "pillow", specifier = ">=12.2.0" },
     { name = "platformdirs", specifier = ">=4.9.6" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "pywebview", specifier = ">=6.1" },
@@ -955,7 +956,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pillow", specifier = ">=12.2.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "rich", specifier = ">=15.0.0" },
 ]

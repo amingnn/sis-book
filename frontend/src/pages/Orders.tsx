@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AutoComplete,
   Button,
   Card,
   DatePicker,
@@ -11,6 +12,7 @@ import {
   Space,
   Table,
   Typography,
+  Upload,
 } from "antd";
 import {
   PlusOutlined,
@@ -19,7 +21,9 @@ import {
   ArrowLeftOutlined,
   EditOutlined,
   FileImageOutlined,
+  FileExcelOutlined,
   FilePdfOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
@@ -33,6 +37,8 @@ import {
 } from "../api/orders";
 import { customersApi, type Customer } from "../api/customers";
 import { productsApi, type Product } from "../api/products";
+import { importExportApi } from "../api/importExport";
+import { syncApi } from "../api/sync";
 import PageToolbar from "../components/PageToolbar";
 import { createActionColumn } from "../components/TableActions";
 
@@ -146,6 +152,43 @@ async function saveExportBlob(blob: Blob, filename: string, fileTypes: string[])
 
   downloadBlob(blob, filename);
   return true;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+  return detail || fallback;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+async function imageFileToJpegDataUrl(file: File): Promise<string> {
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(dataUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext("2d");
+  if (!context) return dataUrl;
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.9);
 }
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -385,6 +428,7 @@ export default function Orders() {
   const [filters, setFilters] = useState<SalesOrderListParams>({});
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   const [form] = Form.useForm();
   const [items, setItems] = useState<ItemRow[]>([newItemRow()]);
@@ -418,6 +462,33 @@ export default function Orders() {
     setItems((prev) =>
       prev.map((r) => (r.key === key ? { ...r, [field]: value } : r))
     );
+  };
+
+  const applyProductToItem = (key: string, value: string) => {
+    const product = products.find((item) => item.name === value);
+    setItems((prev) =>
+      prev.map((row) => {
+        if (row.key !== key) return row;
+        if (!product) return { ...row, product_name: value };
+        return {
+          ...row,
+          product_name: value,
+          per_box_qty: product.per_box_qty || row.per_box_qty,
+          box_size: product.box_spec || row.box_size,
+          image: product.image || row.image,
+        };
+      }),
+    );
+  };
+
+  const handleUploadItemImage = async (key: string, file: File) => {
+    try {
+      const image = await imageFileToJpegDataUrl(file);
+      updateItem(key, "image", image);
+      message.success("图片已上传");
+    } catch {
+      message.error("图片上传失败");
+    }
   };
 
   const removeItem = (key: string) => {
@@ -556,6 +627,21 @@ export default function Orders() {
     }
   };
 
+  const handleExportExcel = async () => {
+    if (!currentOrder) return;
+    setExportingExcel(true);
+    try {
+      const dirRes = await syncApi.browseDir();
+      if (!dirRes.data.path) return;
+      const res = await importExportApi.exportOrderExcel(currentOrder.id, dirRes.data.path);
+      message.success(`Excel 已导出：${res.data.path}`);
+    } catch (error) {
+      message.error(getErrorMessage(error, "导出 Excel 失败"));
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   const updateFilters = (nextFilters: SalesOrderListParams) => {
     setFilters(nextFilters);
   };
@@ -690,15 +776,16 @@ export default function Orders() {
         <Card>
           <Form form={form} layout="inline" style={{ flexWrap: "wrap", gap: "8px 0" }}>
             <Form.Item label="客户名称" name="customer_name" rules={[{ required: true, message: "请输入客户名称" }]}>
-              <Select
-                showSearch
-                optionFilterProp="label"
+              <AutoComplete
                 style={{ width: 180 }}
                 options={customers.map((customer) => ({
                   label: customer.name,
                   value: customer.name,
                 }))}
-                onChange={(value) => {
+                filterOption={(inputValue, option) =>
+                  String(option?.value ?? "").toLowerCase().includes(inputValue.toLowerCase())
+                }
+                onSelect={(value) => {
                   const customer = customers.find((item) => item.name === value);
                   if (customer) {
                     form.setFieldsValue({
@@ -707,6 +794,7 @@ export default function Orders() {
                     });
                   }
                 }}
+                placeholder="客户名称"
               />
             </Form.Item>
             <Form.Item label="电话" name="customer_phone">
@@ -750,26 +838,19 @@ export default function Orders() {
               {
                 title: "产品名称", dataIndex: "product_name", width: 150,
                 render: (_, record) => (
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    value={record.product_name || undefined}
-                    onChange={(value) => {
-                      const product = products.find((item) => item.name === value);
-                      updateItem(record.key, "product_name", value);
-                      if (product) {
-                        updateItem(record.key, "per_box_qty", product.per_box_qty || record.per_box_qty);
-                        updateItem(record.key, "box_size", product.box_spec || record.box_size);
-                        updateItem(record.key, "unit_price", product.purchase_price || record.unit_price);
-                        updateItem(record.key, "image", product.image || record.image);
-                      }
-                    }}
+                  <AutoComplete
+                    value={record.product_name}
+                    onChange={(value) => updateItem(record.key, "product_name", value)}
+                    onSelect={(value) => applyProductToItem(record.key, value)}
                     placeholder="产品名称"
                     style={{ width: "100%" }}
                     options={products.map((product) => ({
                       label: product.name,
                       value: product.name,
                     }))}
+                    filterOption={(inputValue, option) =>
+                      String(option?.value ?? "").toLowerCase().includes(inputValue.toLowerCase())
+                    }
                   />
                 ),
               },
@@ -778,19 +859,31 @@ export default function Orders() {
                 render: (_, record) => (
                   <Space orientation="vertical" size={6}>
                     {record.image ? (
-                      <>
+                      <div>
                         <img
                           src={resolveImageSrc(record.image)}
                           alt="产品预览"
                           style={{ width: 56, height: 56, objectFit: "contain", border: "1px solid #f0f0f0", borderRadius: 6 }}
                         />
-                        <Button size="small" type="link" danger onClick={() => updateItem(record.key, "image", "")}>
-                          移除
-                        </Button>
-                      </>
+                      </div>
                     ) : (
-                      <Typography.Text type="secondary">选择产品后显示</Typography.Text>
+                      <Typography.Text type="secondary">未上传</Typography.Text>
                     )}
+                    <Upload
+                      accept="image/*"
+                      showUploadList={false}
+                      beforeUpload={(file) => {
+                        void handleUploadItemImage(record.key, file);
+                        return false;
+                      }}
+                    >
+                      <Button size="small" icon={<UploadOutlined />}>上传</Button>
+                    </Upload>
+                    {record.image ? (
+                      <Button size="small" type="link" danger onClick={() => updateItem(record.key, "image", "")}>
+                        移除
+                      </Button>
+                    ) : null}
                   </Space>
                 ),
               },
@@ -809,7 +902,13 @@ export default function Orders() {
               {
                 title: "每箱数量", dataIndex: "per_box_qty", width: 85,
                 render: (_, record) => (
-                  <InputNumber min={1} value={record.per_box_qty} onChange={(v) => updateItem(record.key, "per_box_qty", v ?? 1)} style={{ width: "100%" }} />
+                  <InputNumber
+                    min={1}
+                    controls={false}
+                    value={record.per_box_qty}
+                    onChange={(v) => updateItem(record.key, "per_box_qty", v ?? 1)}
+                    style={{ width: "100%" }}
+                  />
                 ),
               },
               {
@@ -890,6 +989,7 @@ export default function Orders() {
         <Button icon={<EditOutlined />} onClick={() => handleEdit(order.id)}>编辑</Button>
         <Button icon={<FileImageOutlined />} onClick={() => void handleExportImage()}>导出图片</Button>
         <Button type="primary" icon={<FilePdfOutlined />} onClick={() => void handleExportPdf()}>导出 PDF</Button>
+        <Button icon={<FileExcelOutlined />} loading={exportingExcel} onClick={() => void handleExportExcel()}>导出 Excel</Button>
       </div>
 
       <div ref={printRef} className="slip">
@@ -1064,6 +1164,7 @@ function OrderFilters({
       />
       <DatePicker.RangePicker
         value={dateRange}
+        placeholder={["开始日期", "结束日期"]}
         onChange={(dates) =>
           onSearch({
             ...filters,

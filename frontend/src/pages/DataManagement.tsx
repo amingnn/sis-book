@@ -208,27 +208,30 @@ export default function DataManagement() {
 
       <Space orientation="vertical" size={16} style={{ width: "100%" }}>
         <Card title="导入导出">
-          <Space wrap>
-            <Button
-              type="primary"
-              icon={<DownloadOutlined />}
-              loading={exporting}
-              onClick={handleExportExcel}
-            >
-              导出 Excel
-            </Button>
-            <Upload
-              accept=".xlsx"
-              showUploadList={false}
-              beforeUpload={(file) => {
-                void handlePreviewExcel(file);
-                return false;
-              }}
-            >
-              <Button icon={<FileExcelOutlined />} loading={previewing}>
-                导入 Excel
+          <Space direction="vertical" size={12}>
+            <Typography.Text type="secondary">导出时会将图片嵌入 Excel 文件。</Typography.Text>
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<DownloadOutlined />}
+                loading={exporting}
+                onClick={handleExportExcel}
+              >
+                导出为 Excel
               </Button>
-            </Upload>
+              <Upload
+                accept=".xlsx"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  void handlePreviewExcel(file);
+                  return false;
+                }}
+              >
+                <Button icon={<FileExcelOutlined />} loading={previewing}>
+                  从 Excel 导入
+                </Button>
+              </Upload>
+            </Space>
           </Space>
         </Card>
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -8,9 +9,15 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from openpyxl import Workbook
+from openpyxl.drawing.image import Image as ExcelImage
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from sqlmodel import Session, SQLModel, select
 
+from app.config import IMG_DIR
 from app.customer.models import Customer
+from app.orders.service import get_order
 from app.product.images import store_product_image
 from app.product.models import Product
 from app.purchases.models import PurchaseOrder
@@ -152,6 +159,87 @@ def _rows_for_export(session: Session, spec: TableSpec) -> list[dict[str, Any]]:
     ]
 
 
+def _safe_filename(name: str, fallback: str) -> str:
+    safe = "".join("-" if char in '\\/:*?"<>|\r\n\t' else char for char in name.strip()).strip(" .-")
+    return safe or fallback
+
+
+def _resolve_local_image(image: str) -> Path | BytesIO | None:
+    if not image:
+        return None
+    if image.startswith("data:"):
+        try:
+            _, encoded = image.split(",", 1)
+            return BytesIO(base64.b64decode(encoded))
+        except ValueError:
+            return None
+
+    if image.startswith("http"):
+        return None
+
+    normalized = image.lstrip("/")
+    if normalized.startswith("img/"):
+        path = IMG_DIR / normalized.removeprefix("img/")
+    else:
+        path = Path(image).expanduser()
+    return path if path.exists() else None
+
+
+def _fit_excel_image(image: ExcelImage, max_width: int = 92, max_height: int = 72) -> None:
+    if image.width <= 0 or image.height <= 0:
+        return
+    scale = min(max_width / image.width, max_height / image.height, 1)
+    image.width = int(image.width * scale)
+    image.height = int(image.height * scale)
+
+
+def _embed_image(ws, cell: str, image_value: str) -> bool:
+    image_source = _resolve_local_image(image_value)
+    if not image_source:
+        return False
+    try:
+        image = ExcelImage(image_source)
+    except Exception:
+        return False
+    _fit_excel_image(image)
+    ws.add_image(image, cell)
+    return True
+
+
+def _write_table_sheet(workbook: Workbook, session: Session, spec: TableSpec) -> None:
+    ws = workbook.create_sheet(spec.sheet_name)
+    headers = [field.label for field in spec.fields]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill("solid", fgColor="EAF2F8")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    rows = session.exec(select(spec.model)).all()
+    if not rows:
+        return
+
+    for row_index, row in enumerate(rows, start=2):
+        for column_index, field in enumerate(spec.fields, start=1):
+            cell = ws.cell(row=row_index, column=column_index)
+            value = getattr(row, field.name, "")
+            if field.name == "image" and value:
+                embedded = _embed_image(ws, cell.coordinate, str(value))
+                if embedded:
+                    ws.row_dimensions[row_index].height = 58
+                    ws.column_dimensions[get_column_letter(column_index)].width = 15
+                continue
+            cell.value = _cell_value(value)
+
+    for column_index, field in enumerate(spec.fields, start=1):
+        column_letter = get_column_letter(column_index)
+        current_width = ws.column_dimensions[column_letter].width or 10
+        if field.name == "image":
+            ws.column_dimensions[column_letter].width = max(current_width, 15)
+        else:
+            ws.column_dimensions[column_letter].width = max(current_width, min(max(len(field.label) + 4, 12), 24))
+
+
 def export_excel(session: Session, target_dir: str) -> dict:
     if not target_dir.strip():
         raise ImportExportError("请先填写导出目录")
@@ -160,13 +248,93 @@ def export_excel(session: Session, target_dir: str) -> dict:
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / f"sis-book-export-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
 
-    with pd.ExcelWriter(target_path, engine="openpyxl") as writer:
-        for spec in TABLE_SPECS:
-            frame = pd.DataFrame(_rows_for_export(session, spec))
-            if frame.empty:
-                frame = pd.DataFrame(columns=[field.label for field in spec.fields])
-            frame.to_excel(writer, sheet_name=spec.sheet_name, index=False)
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for spec in TABLE_SPECS:
+        _write_table_sheet(workbook, session, spec)
+    workbook.save(target_path)
 
+    return {"cancelled": False, "path": str(target_path)}
+
+
+def export_order_excel(session: Session, order_id: int, target_dir: str) -> dict:
+    if not target_dir.strip():
+        raise ImportExportError("请先填写导出目录")
+
+    order = get_order(session, order_id)
+    if not order:
+        raise ImportExportError("销售单不存在")
+
+    target_dir = Path(target_dir).expanduser()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    order_number = order.order_number or f"sales-order-{order.id}"
+    target_path = target_dir / f"{_safe_filename(order_number, '销售单')}.xlsx"
+
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "销售单"
+    ws.merge_cells("A1:K1")
+    ws["A1"] = "暮橙体育销售单"
+    ws["A1"].font = Font(size=16, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center")
+
+    ws.append([])
+    ws.append(["客户", order.customer_name, "电话", order.customer_phone, "销售日期", order.sales_date.isoformat()])
+    ws.append(["送货地址", order.delivery_address, "送货日期", order.delivery_date.isoformat() if order.delivery_date else "", "付款方式", order.payment_terms])
+    ws.append([])
+
+    headers = ["编号", "产品", "颜色", "图片", "总箱数", "每箱数量", "总数量", "单价", "金额", "外箱尺寸", "备注"]
+    ws.append(headers)
+    header_row = ws.max_row
+    for cell in ws[header_row]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill("solid", fgColor="D6EAF8")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    total_boxes = 0
+    total_qty = 0
+    total_amount = Decimal("0")
+    for index, item in enumerate(order.items, start=1):
+        total_qty_for_item = item.total_boxes * item.per_box_qty
+        subtotal = Decimal(item.total_boxes) * Decimal(item.per_box_qty) * Decimal(str(item.unit_price))
+        total_boxes += item.total_boxes
+        total_qty += total_qty_for_item
+        total_amount += subtotal
+        ws.append([
+            index,
+            item.product_name,
+            item.color_spec,
+            "",
+            item.total_boxes,
+            item.per_box_qty,
+            total_qty_for_item,
+            float(item.unit_price),
+            float(subtotal),
+            item.box_size,
+            item.notes,
+        ])
+        row_index = ws.max_row
+        if item.image and _embed_image(ws, f"D{row_index}", item.image):
+            ws.row_dimensions[row_index].height = 58
+
+    ws.append(["合计", "", "", "", total_boxes, "", total_qty, "", float(total_amount), "", ""])
+    total_row = ws.max_row
+    for cell in ws[total_row]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill("solid", fgColor="EAF2F8")
+
+    if order.notes:
+        ws.append([])
+        ws.append(["备注", order.notes])
+
+    widths = [8, 22, 14, 15, 10, 12, 10, 10, 12, 14, 24]
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(index)].width = width
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+    workbook.save(target_path)
     return {"cancelled": False, "path": str(target_path)}
 
 

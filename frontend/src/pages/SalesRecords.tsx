@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AutoComplete,
   Button,
   Card,
   DatePicker,
@@ -346,16 +347,18 @@ export default function SalesRecords() {
               <Form.Item
                 name="customer_name"
                 label="客户"
-                rules={[{ required: true, message: "请选择客户" }]}
+                rules={[{ required: true, message: "请输入客户" }]}
               >
-                <Select
-                  showSearch
-                  optionFilterProp="label"
+                <AutoComplete
                   style={{ width: 220 }}
                   options={customers.map((customer) => ({
                     label: customer.name,
                     value: customer.name,
                   }))}
+                  filterOption={(inputValue, option) =>
+                    String(option?.value ?? "").toLowerCase().includes(inputValue.toLowerCase())
+                  }
+                  placeholder="客户名称"
                 />
               </Form.Item>
             </Space>

@@ -23,6 +23,18 @@ def export_excel(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/export/orders/{order_id}/excel")
+def export_order_excel(
+    order_id: int,
+    payload: ExportExcelPayload,
+    session: Session = Depends(get_session),
+):
+    try:
+        return service.export_order_excel(session, order_id, payload.target_dir)
+    except service.ImportExportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/import/excel/preview")
 async def preview_excel(request: Request):
     try:

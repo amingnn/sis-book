@@ -3,8 +3,10 @@ from decimal import Decimal
 
 from sqlmodel import select
 
+from app.orders import images as order_images
 from app.orders.models import SalesOrder, SalesOrderCreate, SalesOrderItem, SalesOrderItemCreate, SalesOrderUpdate
 from app.orders import service as orders_service
+from app.product.models import Product
 from app.sales.models import SalesRecord
 
 
@@ -74,6 +76,33 @@ def test_create_order_creates_matching_sales_record(session):
     assert sales_record.cost == Decimal("516.00")
     assert sales_record.payment_method == "月结"
     assert sales_record.notes == "开单单号：MC20260420001\n备注"
+
+
+def test_create_order_stores_uploaded_item_image(session, tmp_path, monkeypatch):
+    monkeypatch.setattr(order_images, "IMG_DIR", tmp_path / "img")
+    uploaded_image = "data:image/jpeg;base64,aGVsbG8="
+
+    created = orders_service.create_order(
+        session,
+        _order_payload(items=[_item("羽毛球", 1, 2, "10", image=uploaded_image)]),
+    )
+
+    assert created.items[0].image == "img/MC20260420001/羽毛球.jpg"
+    assert (tmp_path / "img" / "MC20260420001" / "羽毛球.jpg").read_bytes() == b"hello"
+
+
+def test_get_order_hydrates_missing_item_image_from_product_added_later(session):
+    created = orders_service.create_order(
+        session,
+        _order_payload(items=[_item("羽毛球", 1, 2, "10")]),
+    )
+    session.add(Product(name="羽毛球", image="img/羽毛球.jpg"))
+    session.commit()
+
+    refreshed = orders_service.get_order(session, created.id)
+
+    assert refreshed is not None
+    assert refreshed.items[0].image == "img/羽毛球.jpg"
 
 
 def test_update_order_reuses_sales_record_and_replaces_items(session):
