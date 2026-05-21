@@ -86,6 +86,14 @@ jobs:
       - name: 安装 Inno Setup
         run: choco install innosetup -y --no-progress
 
+      - name: 安装 Inno Setup 简体中文语言文件
+        run: |
+          $languageDir = "${env:ProgramFiles(x86)}\Inno Setup 6\Languages"
+          New-Item -ItemType Directory -Path $languageDir -Force
+          Invoke-WebRequest `
+            -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl" `
+            -OutFile "$languageDir\ChineseSimplified.isl"
+
       - name: 构建安装包
         run: iscc build/installer.iss /DMyAppVersion="${{ github.ref_name }}"  # 传递版本号给 Inno Setup 
 
