@@ -4,8 +4,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from platformdirs import user_data_dir
 
+from app.paths import get_backend_root
+
 APP_NAME = "sis-book"
-BACKEND_ROOT = Path(__file__).parents[1]  # 后端根目录
+BACKEND_ROOT = get_backend_root()  # 后端根目录或打包资源根目录
 
 load_dotenv(BACKEND_ROOT / ".env")
 

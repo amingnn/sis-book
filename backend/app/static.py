@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -7,6 +6,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import IMG_DIR
 from app.logging import logger
+from app.paths import is_packaged_runtime
 
 
 class SPAStaticFiles(StaticFiles):
@@ -26,19 +26,12 @@ class SPAStaticFiles(StaticFiles):
             return False
         return Path(path).suffix == ""
 
-
-def get_base_dir(entry_file: Path) -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys._MEIPASS)  # type: ignore
-    return entry_file.parent.parent
-
-
 def mount_static_files(app: FastAPI, base_dir: Path) -> None:
     frontend_dist = base_dir / "frontend" / "dist"
     IMG_DIR.mkdir(parents=True, exist_ok=True)
     logger.info(
         "静态资源挂载检查：frozen={}，base_dir={}，frontend_dist={}，exists={}",
-        getattr(sys, "frozen", False),
+        is_packaged_runtime(),
         base_dir,
         frontend_dist,
         frontend_dist.exists(),

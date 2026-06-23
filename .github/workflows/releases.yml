@@ -58,9 +58,8 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
-  # 构建后端
   build-windows-installer:
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: build-frontend
     steps:
       - uses: actions/checkout@v6
@@ -76,12 +75,9 @@ jobs:
         with:
           enable-cache: true
 
-      - name: 安装后端依赖并用 PyInstaller 打包
-        working-directory: backend
-        run: |
-          uv sync
-          uv pip install pyinstaller
-          uv run pyinstaller ../build/sis-book.spec --noconfirm --distpath ../dist
+      - name: 安装后端依赖并用 Nuitka 打包
+        shell: pwsh
+        run: ./build/windows-package.ps1 -Version "${{ github.ref_name }}" -SkipInstaller
 
       - name: 安装 Inno Setup
         run: choco install innosetup -y --no-progress
@@ -95,7 +91,7 @@ jobs:
             -OutFile "$languageDir\ChineseSimplified.isl"
 
       - name: 构建安装包
-        run: iscc build/installer.iss /DMyAppVersion="${{ github.ref_name }}"  # 传递版本号给 Inno Setup 
+        run: iscc build/installer.iss /DMyAppVersion="${{ github.ref_name }}"  # 传递版本号给 Inno Setup
 
       - name: 上传 exe 包
         uses: actions/upload-artifact@v7

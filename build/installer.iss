@@ -1,5 +1,5 @@
 ; Inno Setup 安装包配置 - 暮橙体育记账本
-; 使用方式: iscc build/installer.iss
+; Windows Nuitka 打包脚本会先生成 dist\暮橙记账本，再调用本文件
 
 #define MyAppName      "暮橙体育记账本"
 #define MyAppExeName   "暮橙记账本.exe"
@@ -34,7 +34,7 @@ Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-; 打包 PyInstaller 输出的整个目录
+; 打包 Nuitka standalone 输出的整个目录
 Source: "..\dist\暮橙记账本\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]

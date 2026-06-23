@@ -1,16 +1,14 @@
 import sys
-from pathlib import Path
 
 from app.dashboard.service import get_dashboard
 from app.factory import create_app
 from app.logging import logger
+from app.paths import get_resource_root
 from app.server import ensure_stdio_for_frozen_app, run_desktop_app, run_dev_server
-from app.static import get_base_dir
 
 
-def _get_base_dir() -> Path:
-    """打包后用 sys._MEIPASS，开发时用项目根目录。"""
-    return get_base_dir(Path(__file__))
+def _get_base_dir():
+    return get_resource_root()
 
 
 ensure_stdio_for_frozen_app()

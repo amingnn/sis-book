@@ -15,7 +15,7 @@
 - 后端：FastAPI + SQLModel + SQLite + loguru，通过 uv 管理环境
 - 前端：React + TypeScript + Ant Design
 - 桌面壳：PyWebView
-- 打包：PyInstaller + Inno Setup
+- 打包：Windows 使用 Nuitka + Inno Setup，macOS 暂保留 PyInstaller + dmg
 - CI：GitHub Actions 自动构建 Windows 和 Mac 安装包
 
 ## 本地开发
@@ -61,6 +61,17 @@ uv run python main.py
 启动桌面应用。桌面端和后端服务日志会写入数据目录，便于排查打包后的问题。
 
 ## 发版
+
+Windows 本地打包需要先构建前端，然后在 Windows 上执行：
+
+```powershell
+cd frontend
+pnpm build
+cd ..
+pwsh ./build/windows-package.ps1 -Version dev
+```
+
+macOS 打包链路暂时仍使用 `build/sis-book.spec`。
 
 在开发完成已经提交并push后执行
 ```bash
