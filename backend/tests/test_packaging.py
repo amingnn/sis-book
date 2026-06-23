@@ -19,3 +19,13 @@ def test_windows_nuitka_script_bundles_runtime_resources():
     assert "--include-module=clr" in script_content
     assert "--include-module=clr_loader" in script_content
     assert "--report=" in script_content
+    assert "-replace '[\\\\/:*?\"<>|]', \"-\"" in script_content
+
+
+def test_release_workflow_sanitizes_installer_version():
+    workflow_path = Path(__file__).parents[2] / ".github" / "workflows" / "releases.yml"
+    workflow_content = workflow_path.read_text(encoding="utf-8")
+
+    assert "PACKAGE_VERSION=$version" in workflow_content
+    assert "-replace '[\\\\/:*?\"<>|]', \"-\"" in workflow_content
+    assert 'iscc build/installer.iss /DMyAppVersion="$env:PACKAGE_VERSION"' in workflow_content

@@ -75,9 +75,18 @@ jobs:
         with:
           enable-cache: true
 
+      - name: 计算安装包版本名
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '[\\/:*?"<>|]', "-"
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            $version = "dev"
+          }
+          "PACKAGE_VERSION=$version" >> $env:GITHUB_ENV
+
       - name: 安装后端依赖并用 Nuitka 打包
         shell: pwsh
-        run: ./build/windows-package.ps1 -Version "${{ github.ref_name }}" -SkipInstaller
+        run: ./build/windows-package.ps1 -Version "$env:PACKAGE_VERSION" -SkipInstaller
 
       - name: 安装 Inno Setup
         run: choco install innosetup -y --no-progress
@@ -91,7 +100,7 @@ jobs:
             -OutFile "$languageDir\ChineseSimplified.isl"
 
       - name: 构建安装包
-        run: iscc build/installer.iss /DMyAppVersion="${{ github.ref_name }}"  # 传递版本号给 Inno Setup
+        run: iscc build/installer.iss /DMyAppVersion="$env:PACKAGE_VERSION"
 
       - name: 上传 exe 包
         uses: actions/upload-artifact@v7

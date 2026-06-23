@@ -23,6 +23,10 @@ $AppDir = Join-Path $DistDir "暮橙记账本"
 $IconPath = Join-Path $ProjectRoot "build/assets/app-icon.ico"
 $ReportPath = Join-Path $DistDir "nuitka-report.xml"
 $InstallerScript = Join-Path $ProjectRoot "build/installer.iss"
+$InstallerVersion = $Version -replace '[\\/:*?"<>|]', "-"
+if ([string]::IsNullOrWhiteSpace($InstallerVersion)) {
+    $InstallerVersion = "dev"
+}
 
 if (-not (Test-Path $FrontendDist)) {
     throw "Missing frontend/dist. Run pnpm build in the frontend directory before packaging."
@@ -79,5 +83,5 @@ if (-not (Test-Path (Join-Path $AppDir "暮橙记账本.exe"))) {
 }
 
 if (-not $SkipInstaller) {
-    & iscc $InstallerScript "/DMyAppVersion=$Version"
+    & iscc $InstallerScript "/DMyAppVersion=$InstallerVersion"
 }
