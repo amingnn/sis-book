@@ -10,9 +10,11 @@ def test_windows_nuitka_script_bundles_runtime_resources():
     assert "--windows-icon-from-ico" in script_content
     assert "frontend/dist" in script_content
     assert "alembic.ini" in script_content
-    assert "alembic/" in script_content
+    assert "alembic/env.py" in script_content
+    assert "alembic/versions/" in script_content
     assert "--include-package=app" in script_content
     assert "--include-package=uvicorn" in script_content
+    assert "--include-package=webview" not in script_content
     assert "--include-module=webview.platforms.winforms" in script_content
     assert "--include-module=clr" in script_content
     assert "--include-module=clr_loader" in script_content

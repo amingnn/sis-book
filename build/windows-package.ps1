@@ -14,6 +14,8 @@ $BackendDir = Join-Path $ProjectRoot "backend"
 $FrontendDist = Join-Path $ProjectRoot "frontend/dist"
 $AlembicIni = Join-Path $BackendDir "alembic.ini"
 $AlembicDir = Join-Path $BackendDir "alembic"
+$AlembicEnv = Join-Path $AlembicDir "env.py"
+$AlembicVersions = Join-Path $AlembicDir "versions/*.py"
 $DistDir = Join-Path $ProjectRoot "dist"
 $NuitkaOutputDir = Join-Path $DistDir "nuitka"
 $NuitkaBuildDir = Join-Path $NuitkaOutputDir "main.dist"
@@ -30,6 +32,9 @@ if (-not (Test-Path $AlembicIni)) {
 }
 if (-not (Test-Path $AlembicDir)) {
     throw "Missing backend/alembic."
+}
+if (-not (Test-Path $AlembicEnv)) {
+    throw "Missing backend/alembic/env.py."
 }
 
 New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
@@ -48,13 +53,13 @@ try {
         --windows-icon-from-ico="$IconPath" `
         --include-package=app `
         --include-package=uvicorn `
-        --include-package=webview `
         --include-module=webview.platforms.winforms `
         --include-module=clr `
         --include-module=clr_loader `
         --include-data-dir="$FrontendDist=frontend/dist" `
         --include-data-files="$AlembicIni=alembic.ini" `
-        --include-data-dir="$AlembicDir=alembic/" `
+        --include-data-files="$AlembicEnv=alembic/env.py" `
+        --include-data-files="$AlembicVersions=alembic/versions/" `
         --report="$ReportPath" `
         main.py
 }
